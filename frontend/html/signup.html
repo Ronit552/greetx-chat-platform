@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Signup - GreetX</title>
+    <!-- Modern Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <!-- Signup Page Specific CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/signup.css') }}">
+</head>
+
+<body>
+    <div class="split-layout">
+        <!-- LEFT PANEL -->
+        <div class="left-panel">
+            <div class="text-content">
+                <img src="{{ url_for('static', filename='assets/images/logo.png') }}" alt="GreetX Logo"
+                    class="brand-logo">
+                <p class="tagline">Start conversations that matter.</p>
+            </div>
+
+            <div class="image-composition">
+                <!-- Tiny UI connection lines -->
+                <div class="connections" style="position:absolute; width:10px; height:10px; z-index:0;">
+                    <svg style="position: absolute; overflow: visible; top: 0; left: 0;">
+                        <!-- line from center to layer 2 -->
+                        <path d="M 0 0 C 80 -30, 130 -40, 180 -60" stroke="#94a3b8" stroke-width="2"
+                            stroke-dasharray="4,6" fill="none" />
+                        <!-- line from center to layer 3 -->
+                        <path d="M 0 0 C -80 -30, -140 -50, -200 -70" stroke="#94a3b8" stroke-width="2"
+                            stroke-dasharray="4,6" fill="none" />
+                        <!-- line from center to layer 4 -->
+                        <path d="M 0 0 C -60 60, -110 110, -170 170" stroke="#94a3b8" stroke-width="2"
+                            stroke-dasharray="4,6" fill="none" />
+                        <!-- Nodes -->
+                        <circle cx="180" cy="-60" r="4" fill="#94a3b8" />
+                        <circle cx="-200" cy="-70" r="4" fill="#94a3b8" />
+                        <circle cx="-170" cy="170" r="4" fill="#94a3b8" />
+                        <circle cx="0" cy="0" r="5" fill="#3b82f6" />
+                    </svg>
+                </div>
+
+                <!-- Layer 3: Portrait -->
+                <div class="image-layer layer-3">
+                    <img src="{{ url_for('static', filename='assets/images/Signup_images/img_3.png') }}" alt="Portrait">
+                </div>
+
+                <!-- Layer 4: Social Vibe -->
+                <div class="image-layer layer-4">
+                    <img src="{{ url_for('static', filename='assets/images/Signup_images/img_4.png') }}"
+                        alt="Group of friends laughing">
+                </div>
+
+                <!-- Layer 2: Chat App UI -->
+                <div class="image-layer layer-2">
+                    <img src="{{ url_for('static', filename='assets/images/Signup_images/img_2.png') }}"
+                        alt="Chat app dark interface">
+                </div>
+
+                <!-- Layer 1: Main Image (Woman on smartphone) -->
+                <div class="image-layer layer-1">
+                    <img src="{{ url_for('static', filename='assets/images/Signup_images/img_1.png') }}"
+                        alt="Woman using smartphone">
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT PANEL -->
+        <div class="right-panel">
+            <div class="form-container">
+                <form id="signup-form">
+                    <!-- STEP 1 -->
+                    <div id="step-1" class="step-block">
+                        <h2 class="form-title">Create an Account</h2>
+                        <p class="form-subtitle">Join GreetX and start connecting.</p>
+                        
+                        <div class="input-group">
+                            <label for="name">Full Name</label>
+                            <input type="text" id="name" placeholder="John Doe" required>
+                        </div>
+
+                        <!-- Email & OTP row -->
+                        <div class="input-group">
+                            <label for="email">Email Address</label>
+                            <div class="action-wrapper">
+                                <input type="email" id="email" placeholder="example@gmail.com" required>
+                                <button type="button" id="btn-send-otp" class="btn-inline hidden">Send OTP</button>
+                                <span id="email-verified-badge" class="badge-inline hidden">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M20 6L9 17l-5-5"></path>
+                                    </svg>
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Hidden OTP field -->
+                        <div class="input-group hidden" id="otp-group">
+                            <label for="otp">Enter OTP</label>
+                            <div class="action-wrapper">
+                                <input type="text" id="otp" placeholder="123456" maxlength="6">
+                                <button type="button" id="btn-verify-otp" class="btn-inline">Verify</button>
+                            </div>
+                            <p id="otp-error" class="error-text hidden">Invalid OTP. Try 123456 for demo.</p>
+                        </div>
+
+                        <!-- Password field with Strength Indicator -->
+                        <div class="input-group">
+                            <label for="password">Password</label>
+                            <input type="password" id="password" placeholder="Create a strong password" required>
+                            <div class="strength-bar-container">
+                                <div class="strength-bar" id="strength-bar"></div>
+                            </div>
+                            <span id="strength-text" class="strength-text"></span>
+                        </div>
+
+                        <!-- Terms and Conditions -->
+                        <div class="terms-group">
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="terms" required>
+                                <span class="checkmark"></span>
+                                <span class="terms-text">I agree to the <a href="#" id="toggle-terms">Terms & Conditions</a></span>
+                            </label>
+                            
+                            <div class="terms-content hidden" id="terms-box">
+                                <p><strong>Demo Terms:</strong> By registering for GreetX, you agree to treat others with respect and adhere to our community guidelines. We respect your privacy and will never share your personal data with third parties. Standard data rates may apply. Use our services responsibly.</p>
+                            </div>
+                        </div>
+
+                        <button type="button" class="btn-primary btn-locked" id="btn-submit-step-1">Create Account</button>
+                    </div>
+
+                    <!-- STEP 2 (Profile Completion) -->
+                    <div id="step-2" class="step-block hidden">
+                        <h2 class="form-title" style="color: #2563eb; font-size: 2.2rem; line-height: 1.1; margin-bottom: 0.5rem;">Almost done! ✨</h2>
+                        <p class="form-subtitle" style="font-size: 1.1rem; font-weight: 500;">Let's setup your profile.</p>
+                        
+                        <div class="input-group">
+                            <label for="username">Username</label>
+                            <input type="text" id="username" placeholder="@johndoe" required>
+                        </div>
+
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="dob">Date of Birth</label>
+                                <input type="date" id="dob" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="gender">Gender</label>
+                                <div class="select-wrapper">
+                                    <select id="gender" required>
+                                        <option value="" disabled selected>Select Gender</option>
+                                        <option value="male">Male</option>
+                                        <option value="female">Female</option>
+                                        <option value="other">Other</option>
+                                        <option value="prefer_not_to_say">Prefer not to say</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn-primary btn-locked" id="btn-complete-profile">Complete Profile</button>
+                    </div>
+                </form>
+
+                <p class="login-prompt">Already have an account? <a href="#">Log In</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Link to Javascript Logic -->
+    <script src="{{ url_for('static', filename='js/signup.js') }}"></script>
+</body>
+
+</html>
