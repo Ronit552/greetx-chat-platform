@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - GreetX</title>
+    <!-- Modern Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <!-- Login Page Specific CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+</head>
+
+<body>
+    <div class="split-layout">
+        <!-- LEFT PANEL -->
+        <div class="left-panel">
+            <div class="text-content">
+                <img src="{{ url_for('static', filename='assets/images/logo.png') }}" alt="GreetX Logo"
+                    class="brand-logo">
+                <p class="tagline">Welcome back to the conversation.</p>
+            </div>
+
+            <div class="image-composition">
+                <!-- Tiny UI connection lines -->
+                <div class="connections" style="position:absolute; width:10px; height:10px; z-index:0;">
+                    <svg style="position: absolute; overflow: visible; top: 0; left: 0;">
+                        <!-- line from center to layer 2 -->
+                        <path d="M 0 0 C 80 -30, 130 -40, 180 -60" stroke="#94a3b8" stroke-width="2"
+                            stroke-dasharray="4,6" fill="none" />
+                        <!-- line from center to layer 3 -->
+                        <path d="M 0 0 C -80 -30, -140 -50, -200 -70" stroke="#94a3b8" stroke-width="2"
+                            stroke-dasharray="4,6" fill="none" />
+                        <!-- line from center to layer 4 -->
+                        <path d="M 0 0 C -60 60, -110 110, -170 170" stroke="#94a3b8" stroke-width="2"
+                            stroke-dasharray="4,6" fill="none" />
+                        <!-- Nodes -->
+                        <circle cx="180" cy="-60" r="4" fill="#94a3b8" />
+                        <circle cx="-200" cy="-70" r="4" fill="#94a3b8" />
+                        <circle cx="-170" cy="170" r="4" fill="#94a3b8" />
+                        <circle cx="0" cy="0" r="5" fill="#3b82f6" />
+                    </svg>
+                </div>
+
+                <!-- Layer 3: Portrait -->
+                <div class="image-layer layer-3">
+                    <img src="{{ url_for('static', filename='assets/images/Signup_images/img_3.png') }}" alt="Portrait">
+                </div>
+
+                <!-- Layer 4: Social Vibe -->
+                <div class="image-layer layer-4">
+                    <img src="{{ url_for('static', filename='assets/images/Signup_images/img_4.png') }}"
+                        alt="Group of friends laughing">
+                </div>
+
+                <!-- Layer 2: Chat App UI -->
+                <div class="image-layer layer-2">
+                    <img src="{{ url_for('static', filename='assets/images/Signup_images/img_2.png') }}"
+                        alt="Chat app dark interface">
+                </div>
+
+                <!-- Layer 1: Main Image (Woman on smartphone) -->
+                <div class="image-layer layer-1">
+                    <img src="{{ url_for('static', filename='assets/images/Signup_images/img_1.png') }}"
+                        alt="Woman using smartphone">
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT PANEL -->
+        <div class="right-panel">
+            <!-- Mobile Header (Visible only on mobile) -->
+            <div class="mobile-header">
+                <img src="{{ url_for('static', filename='assets/images/logo.png') }}" alt="GreetX Logo" class="brand-logo-mobile">
+                <p class="tagline-mobile">Welcome back to the conversation.</p>
+            </div>
+
+            <div class="form-container">
+                <form id="login-form">
+                    <div class="step-block">
+                        <h2 class="form-title">Login to GreetX</h2>
+                        <p class="form-subtitle">Enter your credentials to access your account.</p>
+
+                        <!-- Email -->
+                        <div class="input-group">
+                            <label for="email">Email Address</label>
+                            <input type="email" id="email" placeholder="example@gmail.com" required>
+                        </div>
+
+                        <!-- Password field -->
+                        <div class="input-group">
+                            <div class="password-header" style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; align-items: baseline;">
+                                <label for="password" style="margin-bottom: 0;">Password</label>
+                                <a href="#" class="forgot-password-link" style="font-size: 0.8rem; font-weight: 600; color: #2563eb; text-decoration: none;">Forgot Password?</a>
+                            </div>
+                            <div class="action-wrapper">
+                                <input type="password" id="password" placeholder="Enter your password" required>
+                                <button type="button" id="btn-toggle-password" class="btn-inline" style="background: transparent; color: rgba(255, 255, 255, 0.7); right: 10px; width: auto; padding: 0;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="eye-icon"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                </button>
+                            </div>
+                            <p id="login-error" class="error-text hidden">Invalid email or password.</p>
+                        </div>
+
+                        <!-- Keep me Logged In -->
+                        <div class="terms-group" style="margin-bottom: 2rem; margin-top: 1rem;">
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="remember-me">
+                                <span class="checkmark"></span>
+                                <span class="terms-text">Keep me logged in</span>
+                            </label>
+                        </div>
+
+                        <button type="submit" class="btn-primary" id="btn-submit-login">Log In</button>
+                    </div>
+                </form>
+
+                <p class="login-prompt">Don't have an account? <a href="{{ url_for('signup') }}">Sign Up</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Link to Javascript Logic -->
+    <script src="{{ url_for('static', filename='js/login.js') }}"></script>
+</body>
+
+</html>
