@@ -1,15 +1,67 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GreetX - Chat</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-</head>
-<body>
-    <div class="container">
+{% extends "base.html" %}
+
+{% block title %}GreetX - Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Dashboard Specific Glassy Layout */
+.dashboard-wrapper {
+    max-width: 800px;
+    margin: 4rem auto;
+    text-align: center;
+}
+
+.glass-hero {
+    background: var(--clr-glass-card);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--clr-glass-border);
+    box-shadow: var(--clr-nav-shadow);
+    padding: 4rem 2rem;
+    border-radius: 20px;
+}
+
+.glass-hero h1 {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    color: var(--clr-text-primary);
+}
+
+.glass-hero p {
+    font-size: 1.1rem;
+    color: var(--clr-text-secondary);
+    margin-bottom: 2rem;
+}
+
+.btn-start {
+    display: inline-block;
+    padding: 0.8rem 2rem;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: #fff;
+    text-decoration: none;
+    border-radius: 10px;
+    font-weight: 700;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.btn-start:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4);
+}
+</style>
+{% endblock %}
+
+{% block nav_links %}
+    <a href="{{ url_for('profile') }}" class="nav-link">My Profile</a>
+    <a href="{{ url_for('login') }}" class="nav-link">Log out</a>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-wrapper">
+    <div class="glass-hero">
         <h1>Welcome to GreetX</h1>
-        <p>Your simple, fast chat platform.</p>
+        <p>Your simple, fast, and beautiful glassmorphic chat platform.</p>
+        <a href="{{ url_for('profile') }}" class="btn-start">Setup Profile</a>
     </div>
-</body>
-</html>
+</div>
+{% endblock %}

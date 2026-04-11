@@ -76,4 +76,105 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 1000);
         });
     }
+
+    // --- OTP Login Flow ---
+    const loginStep = document.getElementById('login-step');
+    const otpStep = document.getElementById('otp-step');
+    const forgotPasswordLink = document.getElementById('forgot-password-link');
+    const backToLoginLink = document.getElementById('back-to-login');
+    const btnSendOtp = document.getElementById('btn-send-otp');
+    const btnVerifyOtp = document.getElementById('btn-verify-otp');
+    const otpInputGroup = document.getElementById('otp-input-group');
+    const otpEmail = document.getElementById('otp-email');
+    const otpCode = document.getElementById('otp-code');
+    const otpError = document.getElementById('otp-error');
+
+    if (forgotPasswordLink && otpStep && loginStep) {
+        forgotPasswordLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            
+            // Sync email if typed
+            if (emailInput.value) otpEmail.value = emailInput.value;
+
+            loginStep.classList.remove('slide-in-right');
+            loginStep.classList.add('slide-out-left');
+            
+            setTimeout(() => {
+                loginStep.classList.add('hidden');
+                otpStep.classList.remove('hidden');
+                otpStep.classList.remove('slide-out-left');
+                otpStep.classList.add('slide-in-right');
+            }, 350);
+        });
+    }
+
+    if (backToLoginLink && otpStep && loginStep) {
+        backToLoginLink.addEventListener('click', (e) => {
+            e.preventDefault();
+
+            otpStep.classList.remove('slide-in-right');
+            otpStep.classList.add('slide-out-left');
+            
+            setTimeout(() => {
+                otpStep.classList.add('hidden');
+                loginStep.classList.remove('hidden');
+                loginStep.classList.remove('slide-out-left');
+                loginStep.classList.add('slide-in-right');
+            }, 350);
+        });
+    }
+
+    if (btnSendOtp) {
+        btnSendOtp.addEventListener('click', () => {
+            if (otpEmail.checkValidity() && otpEmail.value.length > 0) {
+                btnSendOtp.textContent = 'Sending...';
+                btnSendOtp.classList.add('btn-locked');
+                
+                setTimeout(() => {
+                    btnSendOtp.classList.add('hidden');
+                    otpInputGroup.classList.remove('hidden');
+                    btnVerifyOtp.classList.remove('hidden');
+                    otpEmail.setAttribute('readonly', 'true');
+                    otpEmail.style.opacity = '0.7';
+                }, 800);
+            } else {
+                otpEmail.classList.add('input-error');
+                setTimeout(() => otpEmail.classList.remove('input-error'), 1000);
+            }
+        });
+    }
+
+    if (btnVerifyOtp) {
+        btnVerifyOtp.addEventListener('click', () => {
+            if (otpCode.value.length > 0) {
+                btnVerifyOtp.textContent = 'Verifying...';
+                btnVerifyOtp.classList.add('btn-locked');
+                
+                setTimeout(() => {
+                    // Mock OTP success on '123456' else fail
+                    if (otpCode.value === '123456') {
+                        btnVerifyOtp.textContent = 'Success!';
+                        otpError.classList.add('hidden');
+                        otpCode.classList.remove('input-error');
+                        setTimeout(() => {
+                            window.location.href = "/";
+                        }, 800);
+                    } else {
+                        btnVerifyOtp.textContent = 'Verify & Log In';
+                        btnVerifyOtp.classList.remove('btn-locked');
+                        otpError.classList.remove('hidden');
+                        otpError.classList.add('shake-error');
+                        otpCode.classList.add('input-error');
+                        
+                        setTimeout(() => {
+                            otpError.classList.remove('shake-error');
+                        }, 500);
+                    }
+                }, 1000);
+            } else {
+                otpCode.classList.add('input-error');
+                setTimeout(() => otpCode.classList.remove('input-error'), 1000);
+            }
+        });
+    }
 });

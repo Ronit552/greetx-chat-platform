@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block title %}Profile - GreetX{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">
+{% endblock %}
+
+{% block content %}
+    <div class="page-wrapper">
+        <!-- Top section -> Profile header -->
+        <header class="profile-header">
+            <div class="header-container">
+                <div class="avatar-container">
+                    <!-- Default avatar will be loaded or fetched from user data -->
+                    <div class="avatar-circle">
+                        <!-- Normally this will be a real image if uploaded -->
+                        <span class="avatar-initials">JD</span>
+                    </div>
+                    <div class="status-indicator online"></div>
+                </div>
+                <div class="header-info">
+                    <h1 class="full-name" id="display-name">John Doe</h1>
+                    <p class="username" id="display-username">@johndoe</p>
+                    <p class="short-bio" id="display-bio">Loving the conversation. Building cool stuff.</p>
+                </div>
+                <div class="header-actions">
+                    <button class="btn-primary" id="btn-quick-edit">Edit Profile</button>
+                    <a href="{{ url_for('index') }}" class="btn-secondary">Back to Chat</a>
+                </div>
+            </div>
+        </header>
+
+        <main class="profile-layout">
+            <!-- Left: Account info + Activity -->
+            <aside class="left-column">
+                <div class="card account-info-card">
+                    <h3 class="card-title">Account Information</h3>
+                    <ul class="info-list">
+                        <li><span class="label">Email Address</span><span class="value">johndoe@example.com</span></li>
+                        <li><span class="label">Joined Date</span><span class="value">April 12, 2026</span></li>
+                        <li><span class="label">Status</span><span class="badge verified">Verified</span></li>
+                        <li><span class="label">User ID</span><span class="value subtle">#GX-90210</span></li>
+                    </ul>
+                </div>
+
+                <div class="card activity-card">
+                    <h3 class="card-title">Recent Activity</h3>
+                    <div class="activity-item">
+                        <span class="act-icon">💬</span>
+                        <div>
+                            <p class="act-title">Recent Chat with Anna</p>
+                            <p class="act-time">2 hours ago</p>
+                        </div>
+                    </div>
+                    <div class="activity-item">
+                        <span class="act-icon">⚙️</span>
+                        <div>
+                            <p class="act-title">Profile Settings Updated</p>
+                            <p class="act-time">Yesterday, 4:20 PM</p>
+                        </div>
+                    </div>
+                    <div class="activity-item">
+                        <span class="act-icon">🔑</span>
+                        <div>
+                            <p class="act-title">Logged in from Windows</p>
+                            <p class="act-time">Yesterday, 10:45 AM</p>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Right: Editable settings + Security + Preferences -->
+            <section class="right-column">
+                <!-- Tabs -->
+                <div class="tabs-container">
+                    <button class="tab-btn active" data-target="tab-edit">Edit Profile</button>
+                    <button class="tab-btn" data-target="tab-security">Security</button>
+                    <button class="tab-btn" data-target="tab-prefs">Preferences</button>
+                </div>
+
+                <!-- TAB 1: Edit Profile -->
+                <div class="card tab-content active" id="tab-edit">
+                    <h2 class="section-title">Edit Profile</h2>
+
+                    <!-- 1. Profile Picture Upload + Preview -->
+                    <div class="avatar-upload-group">
+                        <div class="avatar-preview" id="form-avatar-preview-container">
+                            <span class="avatar-initials" id="form-preview-initials">JD</span>
+                            <img id="form-avatar-preview" src="" alt="Avatar Preview" class="hidden">
+                        </div>
+                        <div class="upload-actions">
+                            <label for="avatar-upload" class="btn-secondary">Upload New Image</label>
+                            <input type="file" id="avatar-upload" accept="image/png, image/jpeg" class="hidden">
+                            <button type="button" class="btn-text text-danger" id="btn-remove-avatar">Remove Image</button>
+                            <p class="hint-text">JPG or PNG. Max size of 2MB.</p>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="edit-name">Full Name</label>
+                        <input type="text" id="edit-name" value="John Doe">
+                    </div>
+
+                    <!-- 2. Username Validation -->
+                    <div class="input-group username-group">
+                        <label for="edit-username">Username <span class="loader hidden" id="username-loader"></span></label>
+                        <div class="input-wrapper">
+                            <span class="prefix">@</span>
+                            <input type="text" id="edit-username" value="johndoe">
+                            <span id="username-status" class="status-badge hidden">Available</span>
+                        </div>
+                        <p class="hint-text" id="username-hint">You can change your username once every 30 days.</p>
+                    </div>
+
+                    <!-- 3. Bio with Character Counter -->
+                    <div class="input-group bio-group">
+                        <div class="label-row">
+                            <label for="edit-bio">Short Bio</label>
+                            <span class="char-counter" id="bio-counter">44/150</span>
+                        </div>
+                        <textarea id="edit-bio" rows="4" maxlength="150" placeholder="Tell us about yourself...">Loving the conversation. Building cool stuff.</textarea>
+                    </div>
+
+                    <div class="form-actions">
+                        <button class="btn-secondary" id="btn-cancel-profile">Cancel</button>
+                        <button class="btn-primary" id="btn-save-profile">Save Changes</button>
+                    </div>
+                </div>
+
+                <!-- TAB 2: Security Settings -->
+                <div class="card tab-content hidden" id="tab-security">
+                    <h2 class="section-title">Security Settings</h2>
+                    
+                    <div class="input-group">
+                        <label for="current-password">Current Password</label>
+                        <input type="password" id="current-password" placeholder="Enter current password" autocomplete="current-password">
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="new-password">New Password</label>
+                            <input type="password" id="new-password" placeholder="Enter new password" autocomplete="new-password">
+                        </div>
+                        <div class="input-group">
+                            <label for="confirm-password">Confirm Password</label>
+                            <input type="password" id="confirm-password" placeholder="Confirm new password" autocomplete="new-password">
+                        </div>
+                    </div>
+
+                    <div class="form-actions border-bottom">
+                        <button class="btn-primary" id="btn-update-password">Update Password</button>
+                    </div>
+
+                    <div class="advanced-security">
+                        <div class="security-info">
+                            <h3>Advanced Options</h3>
+                            <p>Manage active sessions to keep your account secure.</p>
+                        </div>
+                        <div class="danger-zone">
+                            <div>
+                                <h4>Logout from all devices</h4>
+                                <p>This will end all your active sessions elsewhere.</p>
+                            </div>
+                            <button class="btn-danger-outline" id="btn-logout-all">Logout All</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: Preferences -->
+                <div class="card tab-content hidden" id="tab-prefs">
+                    <h2 class="section-title">Preferences</h2>
+
+                    <div class="pref-item">
+                        <div class="pref-info">
+                            <h4>Dark Mode</h4>
+                            <p>Toggle the app's overall theme.</p>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="theme-toggle" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="pref-item">
+                        <div class="pref-info">
+                            <h4>Push Notifications</h4>
+                            <p>Receive alerts for new messages.</p>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="notif-toggle" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="pref-item">
+                        <div class="pref-info">
+                            <h4>Activity Status Privacy</h4>
+                            <p>Allow others to see when you are online.</p>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="privacy-toggle" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Floating Toast Notification -->
+                <div id="toast-notification" class="toast hidden">
+                    <span class="toast-icon">✅</span>
+                    <span class="toast-message">Action successful</span>
+                </div>
+
+            </section>
+        </main>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{{ url_for('static', filename='js/profile.js') }}"></script>
+{% endblock %}
