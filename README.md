@@ -1,6 +1,6 @@
 # GreetX — Modern Chat for Modern People
 <p align="center">
-  <img src="frontend/assets/images/logo.png" alt="GreetX Logo" width="200"/>
+  <img src="frontend/assets/images/logo.png" alt="GreetX Logo" width="250"/>
 </p>
 
 GreetX is a high-performance, premium chat platform designed for real human connection. Built with a sleek **Glassmorphic** aesthetic, it offers a fast, beautiful, and secure environment for real-time communication.
