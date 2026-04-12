@@ -51,7 +51,8 @@ body {
 .text-content {
     position: relative;
     z-index: 10;
-    margin-bottom: 2rem;
+    margin-bottom: 1rem;
+    line-height: 43px;
 }
 
 /* Hide mobile header on desktop */
@@ -61,7 +62,7 @@ body {
 
 .brand-logo {
     height: auto;
-    width: 320px;
+    width: 297px;
     /* Much bigger logo */
     max-width: 100%;
     display: block;

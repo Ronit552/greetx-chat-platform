@@ -1,10 +1,21 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, send_from_directory
+import os
 
 app = Flask(__name__, template_folder='../frontend/html', static_folder='../frontend')
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('landing.html')
+
+@app.route('/screenshots/<path:filename>')
+def screenshots(filename):
+    """Serve screenshot images for the landing page."""
+    screenshots_dir = os.path.join(os.path.dirname(__file__), '..', 'screenshots')
+    return send_from_directory(screenshots_dir, filename)
+
+@app.route('/chat')
+def chat():
+    return render_template('chat.html')
 
 @app.route('/signup')
 def signup():
