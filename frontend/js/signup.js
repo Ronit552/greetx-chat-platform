@@ -39,8 +39,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // OTP Logic (Simulated)
-    btnSendOtp.addEventListener('click', () => {
+    // OTP Logic (Real API)
+    btnSendOtp.addEventListener('click', async () => {
         const email = emailInput.value.trim();
         if(!email) {
             alert('Please enter a valid email address first.');
@@ -49,27 +49,68 @@ document.addEventListener('DOMContentLoaded', () => {
         btnSendOtp.textContent = 'Sending...';
         btnSendOtp.disabled = true;
 
-        setTimeout(() => {
-            btnSendOtp.textContent = 'Sent!';
-            otpGroup.classList.remove('hidden');
-        }, 800);
+        try {
+            const res = await fetch('/api/send_otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            const data = await res.json();
+            
+            if (res.ok) {
+                btnSendOtp.textContent = 'Sent!';
+                otpGroup.classList.remove('hidden');
+            } else {
+                alert('Failed to send OTP: ' + (data.error || 'Unknown error'));
+                btnSendOtp.textContent = 'Send OTP';
+                btnSendOtp.disabled = false;
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Network error while sending OTP');
+            btnSendOtp.textContent = 'Send OTP';
+            btnSendOtp.disabled = false;
+        }
     });
 
-    btnVerifyOtp.addEventListener('click', () => {
+    btnVerifyOtp.addEventListener('click', async () => {
         const otp = otpInput.value.trim();
-        if(otp === '123456') { 
-            otpGroup.classList.add('hidden');
-            btnSendOtp.classList.add('hidden');
-            otpError.classList.add('hidden');
+        const email = emailInput.value.trim();
+        if (!otp) return;
+        
+        btnVerifyOtp.textContent = 'Verifying...';
+        btnVerifyOtp.disabled = true;
+        
+        try {
+            const res = await fetch('/api/verify_otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, otp })
+            });
+            const data = await res.json();
             
-            emailVerifiedBadge.classList.remove('hidden');
-            emailInput.setAttribute('readonly', 'true');
-            emailInput.style.backgroundColor = '#f1f5f9'; 
-            
-            checkStep1Validity();
-        } else {
-            otpInput.classList.add('input-error');
+            if (res.ok) {
+                otpGroup.classList.add('hidden');
+                btnSendOtp.classList.add('hidden');
+                otpError.classList.add('hidden');
+                
+                emailVerifiedBadge.classList.remove('hidden');
+                emailInput.setAttribute('readonly', 'true');
+                emailInput.style.backgroundColor = 'rgba(255, 255, 255, 0.05)'; 
+                
+                checkStep1Validity();
+            } else {
+                otpInput.classList.add('input-error');
+                otpError.textContent = data.error || 'Invalid OTP';
+                otpError.classList.remove('hidden');
+            }
+        } catch (err) {
+            console.error(err);
+            otpError.textContent = 'Network error during verification';
             otpError.classList.remove('hidden');
+        } finally {
+            btnVerifyOtp.textContent = 'Verify';
+            btnVerifyOtp.disabled = false;
         }
     });
 
@@ -191,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Final Form Submission
-    signupForm.addEventListener('submit', (e) => {
+    signupForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         
         // If locked, reject and shake!
@@ -206,6 +247,42 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        alert('Profile Completed Successfully! Welcome to GreetX.');
+        const originalText = btnCompleteProfile.textContent;
+        btnCompleteProfile.textContent = 'Creating Account...';
+        btnCompleteProfile.disabled = true;
+
+        const payload = {
+            name: nameInput.value.trim(),
+            email: emailInput.value.trim(),
+            password: passwordInput.value,
+            username: usernameInput.value.trim(),
+            dob: dobInput.value,
+            gender: genderInput.value
+        };
+
+        try {
+            const response = await fetch('/api/signup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                alert('Profile Completed Successfully! Welcome to GreetX.');
+                window.location.href = '/login'; // Redirect to login
+            } else {
+                alert('Signup failed: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error during signup:', error);
+            alert('An error occurred. Please try again later.');
+        } finally {
+            btnCompleteProfile.textContent = originalText;
+            btnCompleteProfile.disabled = false;
+        }
     });
 });

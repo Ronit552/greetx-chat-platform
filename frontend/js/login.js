@@ -26,54 +26,139 @@ document.addEventListener('DOMContentLoaded', () => {
     function checkFormValidity() {
         if (emailInput.checkValidity() && passwordInput.value.length > 0) {
             btnSubmit.classList.remove('btn-locked');
-            btnSubmit.removeAttribute('disabled');
         } else {
             btnSubmit.classList.add('btn-locked');
-            btnSubmit.setAttribute('disabled', 'true');
         }
     }
 
     emailInput.addEventListener('input', checkFormValidity);
     passwordInput.addEventListener('input', checkFormValidity);
+    emailInput.addEventListener('change', checkFormValidity);
+    passwordInput.addEventListener('change', checkFormValidity);
     
-    // Initial validation state
-    checkFormValidity();
+    // Toast Notification Function
+    function showToast(message, type = 'success') {
+        const toast = document.createElement('div');
+        toast.className = `toast-popup toast-${type}`;
+        toast.textContent = message;
+        
+        // Inline styles for glassmorphism popup
+        toast.style.position = 'fixed';
+        toast.style.top = '20px';
+        toast.style.left = '50%';
+        toast.style.transform = 'translateX(-50%) translateY(-20px)';
+        toast.style.padding = '12px 24px';
+        toast.style.borderRadius = '12px';
+        toast.style.fontSize = '0.95rem';
+        toast.style.fontWeight = '500';
+        toast.style.color = '#ffffff';
+        toast.style.backdropFilter = 'blur(10px)';
+        toast.style.WebkitBackdropFilter = 'blur(10px)';
+        toast.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08)';
+        toast.style.zIndex = '9999';
+        toast.style.opacity = '0';
+        toast.style.transition = 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+        
+        if (type === 'success') {
+            toast.style.background = 'rgba(16, 185, 129, 0.8)'; // Emerald
+            toast.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+        } else {
+            toast.style.background = 'rgba(239, 68, 68, 0.8)'; // Red
+            toast.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+        }
 
-    // Specific Submission handler for demo mockup
+        document.body.appendChild(toast);
+
+        // Animate in
+        setTimeout(() => {
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateX(-50%) translateY(0)';
+        }, 10);
+
+        // Animate out and remove
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(-50%) translateY(-20px)';
+            setTimeout(() => {
+                document.body.removeChild(toast);
+            }, 400);
+        }, 3000);
+    }
+
+    // Real Submission handler to backend API
     if (loginForm) {
-        loginForm.addEventListener('submit', (e) => {
+        loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            // Artificial delay to simulate real network request
+            if (btnSubmit.classList.contains('btn-locked')) {
+                // If the user hasn't filled anything
+                if (!emailInput.value || !passwordInput.value) {
+                    btnSubmit.classList.add('shake-error');
+                    setTimeout(() => btnSubmit.classList.remove('shake-error'), 400);
+                    return;
+                }
+                // If it's locked because fields were autofilled but input event didn't trigger, 
+                // we should let it pass after syncing values.
+            }
+            
             btnSubmit.textContent = 'Authenticating...';
             btnSubmit.classList.add('btn-locked');
+            btnSubmit.setAttribute('disabled', 'true');
             
-            setTimeout(() => {
-                // If it's a demo, we can just say invalid if not a specific testing email or just pretend it's ok.
-                if (emailInput.value !== 'test@greetx.com') {
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: emailInput.value.trim(),
+                        password: passwordInput.value
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    btnSubmit.textContent = 'Success!';
+                    loginError.classList.add('hidden');
+                    emailInput.classList.remove('input-error');
+                    passwordInput.classList.remove('input-error');
+                    
+                    showToast('Login successful! Welcome back.', 'success');
+                    
+                    setTimeout(() => {
+                        window.location.href = "/";
+                    }, 1500); // Wait for toast to be visible before redirect
+                } else {
+                    const errorMsg = data.error || 'Invalid credentials';
+                    showToast(errorMsg, 'error');
+                    
+                    loginError.textContent = errorMsg;
                     loginError.classList.remove('hidden');
                     loginError.classList.add('shake-error');
                     emailInput.classList.add('input-error');
                     passwordInput.classList.add('input-error');
                     
-                    // remove shake to allow it to be re-triggered
                     setTimeout(() => {
                         loginError.classList.remove('shake-error');
                     }, 500);
                     
                     btnSubmit.textContent = 'Log In';
                     btnSubmit.classList.remove('btn-locked');
-                } else {
-                    // Success logic
-                    btnSubmit.textContent = 'Success!';
-                    loginError.classList.add('hidden');
-                    emailInput.classList.remove('input-error');
-                    passwordInput.classList.remove('input-error');
-                    setTimeout(() => {
-                        window.location.href = "/";
-                    }, 800);
+                    btnSubmit.removeAttribute('disabled');
                 }
-            }, 1000);
+            } catch (error) {
+                console.error('Login error:', error);
+                showToast('An error occurred. Please try again.', 'error');
+                
+                loginError.textContent = 'An error occurred. Please try again.';
+                loginError.classList.remove('hidden');
+                
+                btnSubmit.textContent = 'Log In';
+                btnSubmit.classList.remove('btn-locked');
+                btnSubmit.removeAttribute('disabled');
+            }
         });
     }
 
@@ -125,18 +210,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (btnSendOtp) {
-        btnSendOtp.addEventListener('click', () => {
+        btnSendOtp.addEventListener('click', async () => {
             if (otpEmail.checkValidity() && otpEmail.value.length > 0) {
                 btnSendOtp.textContent = 'Sending...';
                 btnSendOtp.classList.add('btn-locked');
                 
-                setTimeout(() => {
-                    btnSendOtp.classList.add('hidden');
-                    otpInputGroup.classList.remove('hidden');
-                    btnVerifyOtp.classList.remove('hidden');
-                    otpEmail.setAttribute('readonly', 'true');
-                    otpEmail.style.opacity = '0.7';
-                }, 800);
+                try {
+                    const res = await fetch('/api/send_otp', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: otpEmail.value.trim() })
+                    });
+                    const data = await res.json();
+                    
+                    if (res.ok) {
+                        btnSendOtp.classList.add('hidden');
+                        otpInputGroup.classList.remove('hidden');
+                        btnVerifyOtp.classList.remove('hidden');
+                        otpEmail.setAttribute('readonly', 'true');
+                        otpEmail.style.opacity = '0.7';
+                        showToast('OTP sent to your email!', 'success');
+                    } else {
+                        showToast(data.error || 'Failed to send OTP', 'error');
+                        btnSendOtp.textContent = 'Send OTP';
+                        btnSendOtp.classList.remove('btn-locked');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    showToast('Network error while sending OTP', 'error');
+                    btnSendOtp.textContent = 'Send OTP';
+                    btnSendOtp.classList.remove('btn-locked');
+                }
             } else {
                 otpEmail.classList.add('input-error');
                 setTimeout(() => otpEmail.classList.remove('input-error'), 1000);
@@ -145,23 +249,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (btnVerifyOtp) {
-        btnVerifyOtp.addEventListener('click', () => {
+        btnVerifyOtp.addEventListener('click', async () => {
             if (otpCode.value.length > 0) {
                 btnVerifyOtp.textContent = 'Verifying...';
                 btnVerifyOtp.classList.add('btn-locked');
                 
-                setTimeout(() => {
-                    // Mock OTP success on '123456' else fail
-                    if (otpCode.value === '123456') {
+                try {
+                    const res = await fetch('/api/login_otp', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: otpEmail.value.trim(), otp_code: otpCode.value.trim() })
+                    });
+                    const data = await res.json();
+                    
+                    if (res.ok) {
                         btnVerifyOtp.textContent = 'Success!';
                         otpError.classList.add('hidden');
                         otpCode.classList.remove('input-error');
+                        showToast('Login successful!', 'success');
                         setTimeout(() => {
                             window.location.href = "/";
-                        }, 800);
+                        }, 1000);
                     } else {
                         btnVerifyOtp.textContent = 'Verify & Log In';
                         btnVerifyOtp.classList.remove('btn-locked');
+                        otpError.textContent = data.error || 'Invalid OTP code';
                         otpError.classList.remove('hidden');
                         otpError.classList.add('shake-error');
                         otpCode.classList.add('input-error');
@@ -170,7 +282,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             otpError.classList.remove('shake-error');
                         }, 500);
                     }
-                }, 1000);
+                } catch (err) {
+                    console.error(err);
+                    showToast('Network error during verification', 'error');
+                    btnVerifyOtp.textContent = 'Verify & Log In';
+                    btnVerifyOtp.classList.remove('btn-locked');
+                }
             } else {
                 otpCode.classList.add('input-error');
                 setTimeout(() => otpCode.classList.remove('input-error'), 1000);

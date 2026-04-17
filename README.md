@@ -17,7 +17,7 @@ GreetX is a high-performance, premium chat platform designed for real human conn
 ### 🔐 Secure & Modern Authentication
 - **Split-Screen Layout**: Immersive visual context during the onboarding process.
 - **Two-Step Registration**: A streamlined flow with real-time password strength validation and verification badges.
-- **Dual Login Methods**: Support for traditional Password login and secure **OTP (One-Time Password)** authentication.
+- **Dual Login Methods**: Support for traditional Password login (fully backend integrated) and secure **OTP (One-Time Password)** authentication.
 - **Auto-fill Optimization**: Custom handling for browser autofill to maintain the glassmorphic background integrity.
 
 ### 💬 Interactive Chat Experience
@@ -67,7 +67,7 @@ GreetX is a high-performance, premium chat platform designed for real human conn
 
 ## 🛠️ Tech Stack
 
-- **Backend**: Python Flask (Jinja2 Templates)
+- **Backend**: Python Flask (Jinja2 Templates), PostgreSQL (Database), SQLAlchemy (ORM), Flask-Mail (OTP delivery)
 - **Frontend**: Vanilla HTML5, CSS3 (Modern HSL Colors, Glassmorphism, CSS Variables)
 - **JavaScript**: Pure Vanilla JS (No heavy frameworks, for maximum performance)
 - **Icons & Fonts**: Google Fonts (Inter, Outfit), SVG Path Icons
@@ -87,18 +87,23 @@ GreetX is a high-performance, premium chat platform designed for real human conn
    cd backend
    ```
 
-3. **Install dependencies** (optional, uses Flask):
+3. **Install dependencies**:
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Run the server**:
+4. **Configure Database**:
+   - Create a `.env` file in the `backend` folder.
+   - Add your database URL: `database_url="postgresql://username:password@localhost:5432/greetx_db"`
+   - Note: The database will be created automatically on the first run using SQLAlchemy.
+
+5. **Run the server**:
    ```bash
    python app.py
    ```
 
-5. **Access the app**:
-   Open `http://127.0.0.1:5000/` in your browser.
+6. **Access the app**:
+   Open `https://localhost:5000/` in your browser. Note: Your browser may warn you about an insecure connection because it uses a self-signed certificate for local development. You can bypass this warning to view the app.
 
 ---
 
