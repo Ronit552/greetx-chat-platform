@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     showToast('Login successful! Welcome back.', 'success');
                     
                     setTimeout(() => {
-                        window.location.href = "/";
+                        window.location.href = "/profile";
                     }, 1500); // Wait for toast to be visible before redirect
                 } else {
                     const errorMsg = data.error || 'Invalid credentials';
@@ -268,7 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         otpCode.classList.remove('input-error');
                         showToast('Login successful!', 'success');
                         setTimeout(() => {
-                            window.location.href = "/";
+                            window.location.href = "/profile";
                         }, 1000);
                     } else {
                         btnVerifyOtp.textContent = 'Verify & Log In';

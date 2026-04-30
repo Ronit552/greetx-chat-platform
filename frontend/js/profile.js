@@ -105,93 +105,59 @@ document.addEventListener('DOMContentLoaded', () => {
         bioInput.dispatchEvent(new Event('input'));
     }
 
-    // --- USERNAME AVAILABILITY DEBOUNCE (MOCK API) ---
-    const usernameInput = document.getElementById('edit-username');
-    const usernameStatus = document.getElementById('username-status');
-    const usernameLoader = document.getElementById('username-loader');
-    let debounceTimer;
-
-    const takenUsernames = ['admin', 'johndoe', 'greetx', 'test'];
-
-    if (usernameInput) {
-        usernameInput.addEventListener('input', () => {
-            const val = usernameInput.value.trim().toLowerCase();
-            
-            // Hide previous badges and show loader
-            usernameStatus.classList.add('hidden');
-            usernameStatus.classList.remove('available', 'taken');
-            
-            if (val.length < 3) {
-                usernameLoader.classList.add('hidden');
-                usernameStatus.textContent = 'Too short';
-                usernameStatus.classList.add('taken', 'hidden'); 
-                return;
-            }
-
-            usernameLoader.classList.remove('hidden');
-
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => {
-                // Mock API Delay over
-                usernameLoader.classList.add('hidden');
-                usernameStatus.classList.remove('hidden');
-
-                if (takenUsernames.includes(val)) {
-                    if (val === 'johndoe') {
-                        // Current user
-                        usernameStatus.textContent = 'Current';
-                        usernameStatus.classList.add('available');
-                    } else {
-                        usernameStatus.textContent = 'Taken';
-                        usernameStatus.classList.add('taken');
-                    }
-                } else {
-                    usernameStatus.textContent = 'Available';
-                    usernameStatus.classList.add('available');
-                }
-            }, 600); // 600ms debounce
-        });
-    }
+    // --- USERNAME VALIDATION REMOVED ---
 
     // --- FORM ACTIONS (MOCK) ---
     const btnSaveProfile = document.getElementById('btn-save-profile');
     if (btnSaveProfile) {
-        btnSaveProfile.addEventListener('click', () => {
+        btnSaveProfile.addEventListener('click', async () => {
+            const name = document.getElementById('edit-name').value;
+            const bio = document.getElementById('edit-bio').value;
+            const username = document.getElementById('edit-username').value;
+            
             const ogText = btnSaveProfile.textContent;
             btnSaveProfile.textContent = 'Saving...';
             btnSaveProfile.classList.add('loading');
 
-            setTimeout(() => {
+            try {
+                const res = await fetch('/api/profile', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, bio, username })
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    document.getElementById('display-name').textContent = name;
+                    document.getElementById('display-bio').textContent = bio;
+                    document.getElementById('display-username').textContent = '@' + username;
+                    showToast('Profile updated successfully!', false);
+                } else {
+                    showToast(data.error || 'Failed to update profile', true);
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Network error during update', true);
+            } finally {
                 btnSaveProfile.textContent = ogText;
                 btnSaveProfile.classList.remove('loading');
-                
-                // Mock updating the Display Name & Bio in the header
-                document.getElementById('display-name').textContent = document.getElementById('edit-name').value;
-                document.getElementById('display-bio').textContent = document.getElementById('edit-bio').value;
-
-                // Sync Username if valid
-                if (usernameStatus.classList.contains('available') && usernameInput.value.trim() !== '') {
-                    document.getElementById('display-username').textContent = '@' + usernameInput.value.trim();
-                }
-
-                showToast('Profile updated successfully!', false);
-            }, 1000);
+            }
         });
     }
 
     const btnUpdatePassword = document.getElementById('btn-update-password');
     if (btnUpdatePassword) {
-        btnUpdatePassword.addEventListener('click', () => {
-            const current = document.getElementById('current-password').value;
-            const newPass = document.getElementById('new-password').value;
-            const confirmPass = document.getElementById('confirm-password').value;
+        btnUpdatePassword.addEventListener('click', async () => {
+            const current_password = document.getElementById('current-password').value;
+            const new_password = document.getElementById('new-password').value;
+            const confirm_password = document.getElementById('confirm-password').value;
 
-            if(!current || !newPass || !confirmPass) {
+            if(!current_password || !new_password || !confirm_password) {
                 showToast('Please fill all password fields', true);
                 return;
             }
 
-            if(newPass !== confirmPass) {
+            if(new_password !== confirm_password) {
                 showToast('New passwords do not match', true);
                 return;
             }
@@ -200,24 +166,91 @@ document.addEventListener('DOMContentLoaded', () => {
             btnUpdatePassword.textContent = 'Updating...';
             btnUpdatePassword.classList.add('loading');
             
-            setTimeout(() => {
+            try {
+                const res = await fetch('/api/profile/password', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ current_password, new_password, confirm_password })
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    document.getElementById('current-password').value = '';
+                    document.getElementById('new-password').value = '';
+                    document.getElementById('confirm-password').value = '';
+                    showToast('Password updated securely!', false);
+                } else {
+                    showToast(data.error || 'Failed to update password', true);
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Network error during password update', true);
+            } finally {
                 btnUpdatePassword.textContent = ogText;
                 btnUpdatePassword.classList.remove('loading');
-                document.getElementById('current-password').value = '';
-                document.getElementById('new-password').value = '';
-                document.getElementById('confirm-password').value = '';
-                showToast('Password updated securely!', false);
-            }, 1200);
+            }
         });
     }
 
     const btnLogoutAll = document.getElementById('btn-logout-all');
     if (btnLogoutAll) {
-        btnLogoutAll.addEventListener('click', () => {
-            if(confirm("Are you sure you want to log out from all other devices?")) {
-                showToast('Logging out of active sessions...', false);
-                setTimeout(() => { showToast('Sessions terminated.', false); }, 1500);
+        btnLogoutAll.addEventListener('click', async () => {
+            if(confirm("Are you sure you want to log out completely?")) {
+                showToast('Logging out...', false);
+                try {
+                    await fetch('/api/logout', { method: 'POST' });
+                    window.location.href = '/login';
+                } catch (err) {
+                    showToast('Failed to logout cleanly', true);
+                }
             }
+        });
+    }
+
+    // --- PREFERENCES SETTINGS ---
+    const themeToggle = document.getElementById('theme-toggle');
+    const notifToggle = document.getElementById('notif-toggle');
+    const privacyToggle = document.getElementById('privacy-toggle');
+
+    // Initialize toggles from localStorage
+    if (themeToggle) {
+        themeToggle.checked = (localStorage.getItem('theme') || 'light') === 'dark';
+        themeToggle.addEventListener('change', (e) => {
+            const newTheme = e.target.checked ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            
+            // Sync navbar icons
+            const sunIcon = document.querySelector('.sun-icon');
+            const moonIcon = document.querySelector('.moon-icon');
+            if (newTheme === 'dark') {
+                if(moonIcon) moonIcon.classList.add('hidden');
+                if(sunIcon) sunIcon.classList.remove('hidden');
+            } else {
+                if(moonIcon) moonIcon.classList.remove('hidden');
+                if(sunIcon) sunIcon.classList.add('hidden');
+            }
+            showToast(`Theme changed to ${newTheme} mode`);
+        });
+    }
+
+    if (notifToggle) {
+        const notifPref = localStorage.getItem('pref_notif');
+        notifToggle.checked = notifPref === null ? true : notifPref === 'true';
+        
+        notifToggle.addEventListener('change', (e) => {
+            localStorage.setItem('pref_notif', e.target.checked);
+            showToast(e.target.checked ? 'Push notifications enabled' : 'Push notifications disabled');
+        });
+    }
+
+    if (privacyToggle) {
+        const privPref = localStorage.getItem('pref_privacy');
+        privacyToggle.checked = privPref === null ? true : privPref === 'true';
+        
+        privacyToggle.addEventListener('change', (e) => {
+            localStorage.setItem('pref_privacy', e.target.checked);
+            showToast(e.target.checked ? 'Activity status visible' : 'Activity status hidden');
         });
     }
 

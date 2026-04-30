@@ -1,12 +1,14 @@
-from flask import Flask, render_template, send_from_directory, request, jsonify
+from flask import Flask, render_template, send_from_directory, request, jsonify, session, redirect, url_for, Response, stream_with_context
 import os
 import random
 import string
+import time
+import json
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_mail import Mail, Message
-from models import db, User, OTP
+from models import db, User, OTP, Friendship, Notification
 
 load_dotenv()
 
@@ -24,6 +26,8 @@ app.config['MAIL_USERNAME'] = os.getenv('email')
 app.config['MAIL_PASSWORD'] = os.getenv('email_pass')
 
 mail = Mail(app)
+
+app.secret_key = os.getenv('SECRET_KEY') or os.urandom(24)
 
 db.init_app(app)
 
@@ -54,7 +58,12 @@ def login():
 
 @app.route('/profile')
 def profile():
-    return render_template('profile.html')
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    user = User.query.get(session['user_id'])
+    if not user:
+        return redirect(url_for('login'))
+    return render_template('profile.html', user=user)
 
 @app.route('/contacts')
 def contacts():
@@ -94,6 +103,7 @@ def api_signup():
     try:
         db.session.add(new_user)
         db.session.commit()
+        session['user_id'] = new_user.id
         return jsonify({'message': 'User created successfully'}), 201
     except Exception as e:
         db.session.rollback()
@@ -111,6 +121,7 @@ def api_login():
     if not user or not check_password_hash(user.password_hash, data['password']):
         return jsonify({'error': 'Invalid email or password'}), 401
         
+    session['user_id'] = user.id
     return jsonify({'message': 'Login successful', 'user_id': user.id, 'username': user.username}), 200
 
 @app.route('/api/send_otp', methods=['POST'])
@@ -224,7 +235,449 @@ def login_otp():
     if otp_record.expires_at < datetime.utcnow():
         return jsonify({'error': 'OTP has expired'}), 400
         
+    session['user_id'] = user.id
     return jsonify({'message': 'OTP Login successful', 'user_id': user.id, 'username': user.username}), 200
 
+@app.route('/api/profile', methods=['PUT'])
+def update_profile():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+        
+    data = request.get_json()
+    user = User.query.get(session['user_id'])
+    
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+        
+    if 'name' in data:
+        user.name = data['name']
+    if 'bio' in data:
+        user.bio = data['bio']
+            
+    try:
+        db.session.commit()
+        return jsonify({'message': 'Profile updated successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/profile/password', methods=['PUT'])
+def update_password():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+        
+    data = request.get_json()
+    user = User.query.get(session['user_id'])
+    
+    if not check_password_hash(user.password_hash, data.get('current_password')):
+        return jsonify({'error': 'Incorrect current password'}), 401
+        
+    if data.get('new_password') != data.get('confirm_password'):
+        return jsonify({'error': 'Passwords do not match'}), 400
+        
+    user.password_hash = generate_password_hash(data.get('new_password'))
+    db.session.commit()
+    return jsonify({'message': 'Password updated successfully'}), 200
+
+@app.route('/api/logout', methods=['POST'])
+def logout():
+    session.pop('user_id', None)
+    return jsonify({'message': 'Logged out successfully'}), 200
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SEARCH
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.route('/api/search/users', methods=['GET'])
+def search_users():
+    """Live username prefix-search.
+
+    Query param:  q=<prefix>   (must be ≥ 2 characters)
+    Returns:      JSON array of up to 8 matching users.
+    Auth:         Session required (private endpoint).
+
+    Exclusion logic
+    ───────────────
+    We collect IDs to hide from results:
+      • The current logged-in user (themselves).
+      • Anyone with whom a Friendship record exists in EITHER direction
+        and ANY status (pending OR accepted).  This prevents re-sending
+        duplicate requests and avoids showing existing friends.
+
+    DB query
+    ────────
+    User.username.ilike(f"{q}%")
+    → Prefix ILIKE hits the B-Tree index (ix_users_username_btree)
+      so this stays O(log n) even at large user counts.
+    """
+    if 'user_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify([]), 200
+
+    current_id = session['user_id']
+
+    # ── Accepted friends (both directions) → fully excluded from search ──────
+    accepted_sent = {
+        f.receiver_id for f in
+        Friendship.query.filter_by(sender_id=current_id, status='accepted').all()
+    }
+    accepted_recv = {
+        f.sender_id for f in
+        Friendship.query.filter_by(receiver_id=current_id, status='accepted').all()
+    }
+
+    # ── Pending requests I RECEIVED → exclude (they appear in my pending panel)
+    recv_pending_ids = {
+        f.sender_id for f in
+        Friendship.query.filter_by(receiver_id=current_id, status='pending').all()
+    }
+
+    # ── Pending requests I SENT → keep in results but mark as 'pending_sent' ─
+    sent_pending_ids = {
+        f.receiver_id for f in
+        Friendship.query.filter_by(sender_id=current_id, status='pending').all()
+    }
+
+    # Fully excluded IDs (self + accepted + received-pending)
+    excluded_ids = accepted_sent | accepted_recv | recv_pending_ids | {current_id}
+
+    # Prefix-ILIKE search — uses the B-Tree index on username
+    results = (
+        User.query
+        .filter(
+            User.username.ilike(f"{q}%"),
+            ~User.id.in_(excluded_ids)
+        )
+        .limit(8)
+        .all()
+    )
+
+    def make_initials(name):
+        parts = name.strip().split()
+        if len(parts) >= 2:
+            return (parts[0][0] + parts[-1][0]).upper()
+        return name[:2].upper()
+
+    data = [
+        {
+            'id':           u.id,
+            'username':     u.username,
+            'name':         u.name,
+            'bio':          u.bio or '',
+            'initials':     make_initials(u.name),
+            # 'pending_sent' → I already sent a request; 'none' → no relationship
+            'relationship': 'pending_sent' if u.id in sent_pending_ids else 'none',
+        }
+        for u in results
+    ]
+
+    return jsonify(data), 200
+
+
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FRIENDS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _make_initials(name):
+    """Generate 1–2 character initials from a display name."""
+    parts = name.strip().split()
+    if len(parts) >= 2:
+        return (parts[0][0] + parts[-1][0]).upper()
+    return name[:2].upper()
+
+
+@app.route('/api/friends/request', methods=['POST'])
+def send_friend_request():
+    """Send a friend request.
+
+    Body: { "receiver_id": <int> }
+
+    Duplicate safety (two layers):
+      1. API checks both directions before inserting.
+      2. DB UniqueConstraint on (sender_id, receiver_id) as final guard.
+    """
+    if 'user_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+
+    data        = request.get_json()
+    receiver_id = data.get('receiver_id')
+    sender_id   = session['user_id']
+
+    if not receiver_id:
+        return jsonify({'error': 'receiver_id is required'}), 400
+
+    if receiver_id == sender_id:
+        return jsonify({'error': 'You cannot send a friend request to yourself'}), 400
+
+    # Check receiver exists
+    receiver = User.query.get(receiver_id)
+    if not receiver:
+        return jsonify({'error': 'User not found'}), 404
+
+    # Bidirectional duplicate check
+    existing = Friendship.query.filter(
+        db.or_(
+            db.and_(Friendship.sender_id == sender_id,   Friendship.receiver_id == receiver_id),
+            db.and_(Friendship.sender_id == receiver_id, Friendship.receiver_id == sender_id),
+        )
+    ).first()
+
+    if existing:
+        if existing.status == 'accepted':
+            return jsonify({'error': 'You are already friends'}), 409
+        return jsonify({'error': 'A friend request already exists between these users'}), 409
+
+    new_req = Friendship(sender_id=sender_id, receiver_id=receiver_id, status='pending')
+    try:
+        db.session.add(new_req)
+        # Create notification for the receiver
+        notif = Notification(
+            user_id      = receiver_id,
+            from_user_id = sender_id,
+            type         = 'friend_request',
+        )
+        db.session.add(notif)
+        db.session.commit()
+        return jsonify({'message': f'Friend request sent to @{receiver.username}'}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/friends', methods=['GET'])
+def get_friends():
+    """Return the current user's friends list and pending incoming requests.
+
+    Response shape:
+    {
+      "friends":          [ { id, username, name, bio, initials } ],
+      "pending_received": [ { friendship_id, id, username, name, bio, initials } ]
+    }
+    """
+    if 'user_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+
+    me = session['user_id']
+
+    # Accepted friendships — appear in BOTH directions
+    accepted = Friendship.query.filter(
+        db.or_(
+            db.and_(Friendship.sender_id   == me, Friendship.status == 'accepted'),
+            db.and_(Friendship.receiver_id == me, Friendship.status == 'accepted'),
+        )
+    ).all()
+
+    friends = []
+    for f in accepted:
+        other = f.receiver if f.sender_id == me else f.sender
+        friends.append({
+            'id':       other.id,
+            'username': other.username,
+            'name':     other.name,
+            'bio':      other.bio or '',
+            'initials': _make_initials(other.name),
+        })
+
+    # Pending requests received by me (I need to act on these)
+    pending = Friendship.query.filter_by(receiver_id=me, status='pending').all()
+    pending_received = []
+    for f in pending:
+        u = f.sender
+        pending_received.append({
+            'friendship_id': f.id,
+            'id':            u.id,
+            'username':      u.username,
+            'name':          u.name,
+            'bio':           u.bio or '',
+            'initials':      _make_initials(u.name),
+        })
+
+    return jsonify({'friends': friends, 'pending_received': pending_received}), 200
+
+
+@app.route('/api/friends/accept/<int:friendship_id>', methods=['POST'])
+def accept_friend_request(friendship_id):
+    """Accept a pending friend request.
+    Only the receiver of the request is allowed to accept it.
+    """
+    if 'user_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+
+    f = Friendship.query.get(friendship_id)
+    if not f:
+        return jsonify({'error': 'Friend request not found'}), 404
+
+    if f.receiver_id != session['user_id']:
+        return jsonify({'error': 'Forbidden — you are not the receiver of this request'}), 403
+
+    if f.status != 'pending':
+        return jsonify({'error': 'This request is not pending'}), 409
+
+    f.status = 'accepted'
+    # Create notification for the original sender (their request was accepted)
+    notif = Notification(
+        user_id      = f.sender_id,
+        from_user_id = f.receiver_id,
+        type         = 'friend_accepted',
+    )
+    db.session.add(notif)
+    db.session.commit()
+    return jsonify({'message': f'You are now friends with @{f.sender.username}'}), 200
+
+
+@app.route('/api/friends/decline/<int:friendship_id>', methods=['POST'])
+def decline_friend_request(friendship_id):
+    """Decline or cancel a friend request.
+    Either the receiver (decline) or the sender (cancel/withdraw) can delete it.
+    """
+    if 'user_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+
+    f = Friendship.query.get(friendship_id)
+    if not f:
+        return jsonify({'error': 'Friend request not found'}), 404
+
+    me = session['user_id']
+    if f.receiver_id != me and f.sender_id != me:
+        return jsonify({'error': 'Forbidden'}), 403
+
+    try:
+        db.session.delete(f)
+        db.session.commit()
+        return jsonify({'message': 'Friend request removed'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NOTIFICATIONS
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.route('/api/notifications')
+def get_notifications():
+    """Return all unread notifications for the current user (used on page load)."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+
+    notifs = (
+        Notification.query
+        .filter_by(user_id=session['user_id'], is_read=False)
+        .order_by(Notification.created_at.desc())
+        .limit(30)
+        .all()
+    )
+    return jsonify([_fmt_notif(n) for n in notifs]), 200
+
+
+@app.route('/api/notifications/mark-read', methods=['POST'])
+def mark_notifications_read():
+    """Mark specific notification IDs as read.
+    Body: { "ids": [1, 2, 3] }  — or omit to mark ALL unread as read.
+    """
+    if 'user_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+
+    data = request.get_json() or {}
+    ids  = data.get('ids')  # list of ints, or None
+
+    q = Notification.query.filter_by(user_id=session['user_id'], is_read=False)
+    if ids:
+        q = q.filter(Notification.id.in_(ids))
+    q.update({'is_read': True}, synchronize_session=False)
+    db.session.commit()
+    return jsonify({'message': 'Marked as read'}), 200
+
+
+@app.route('/api/notifications/stream')
+def notification_stream():
+    """Server-Sent Events endpoint for real-time notifications.
+
+    The browser connects once via EventSource; this generator polls the DB
+    every 5 seconds and pushes any new rows as SSE events.
+
+    SSE protocol:
+      id: <notif_id>         — browser sends Last-Event-ID on reconnect
+      data: <json>           — notification payload
+      : keepalive            — heartbeat comment (no event fired)
+    """
+    if 'user_id' not in session:
+        return '', 401
+
+    user_id  = session['user_id']
+    # Priority: Last-Event-ID header (auto-sent by EventSource on reconnect)
+    #           > ?after= query param  (sent by JS on first connection)
+    #           > 0 (fresh start, no history)
+    header_id = request.headers.get('Last-Event-ID', '').strip()
+    param_id  = request.args.get('after', '').strip()
+    last_id   = int(header_id or param_id or 0)
+
+
+    def generate(uid, start_id):
+        cursor = start_id
+        while True:
+            try:
+                new_notifs = (
+                    Notification.query
+                    .filter(
+                        Notification.user_id == uid,
+                        Notification.is_read == False,
+                        Notification.id > cursor,
+                    )
+                    .order_by(Notification.id.asc())
+                    .all()
+                )
+
+                for n in new_notifs:
+                    cursor = n.id
+                    payload = json.dumps(_fmt_notif(n))
+                    yield f'id: {n.id}\ndata: {payload}\n\n'
+
+                if not new_notifs:
+                    # Heartbeat — keeps the connection alive through proxies/browsers
+                    yield ': keepalive\n\n'
+
+            except Exception:
+                yield ': error\n\n'
+            finally:
+                # Return the DB connection to the pool between sleeps
+                db.session.remove()
+
+            time.sleep(5)
+
+    return Response(
+        stream_with_context(generate(user_id, last_id)),
+        content_type  = 'text/event-stream',
+        headers       = {
+            'Cache-Control':    'no-cache',
+            'X-Accel-Buffering': 'no',       # disable nginx buffering
+            'Connection':       'keep-alive',
+        },
+    )
+
+
+def _fmt_notif(n):
+    """Serialize a Notification row to a dict for JSON/SSE."""
+    return {
+        'id':             n.id,
+        'type':           n.type,
+        'from_name':      n.from_user.name,
+        'from_username':  n.from_user.username,
+        'from_initials':  _make_initials(n.from_user.name),
+        'created_at':     n.created_at.isoformat(),
+        'is_read':        n.is_read,
+    }
+
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', debug=True, port=5000, ssl_context='adhoc') #https enabled
+    # threaded=True is required for concurrent SSE connections
+    app.run(host='0.0.0.0', debug=True, port=5000, threaded=True)
+

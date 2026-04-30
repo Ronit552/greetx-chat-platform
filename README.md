@@ -27,9 +27,16 @@ GreetX is a high-performance, premium chat platform designed for real human conn
 - **Mock Auto-Reply**: Interactive simulation of a responsive chat environment.
 
 ### 👤 Profile & Contacts Management
-- **Centralized Settings**: Two-column dashboard for editing profile details, security settings, and app preferences.
+- **Centralized Settings**: Two-column dashboard for editing profile details (with immutable usernames), security settings, and app preferences.
 - **Live Preview**: Mock image-upload with `FileReader` previews and interactive bio character counters.
 - **Contact Directory**: Manage your network with searchable public profiles and friendship statuses.
+
+### 🔎 Real-Time User Search
+- **Debounced Live Search**: 300ms debounce on every keystroke prevents excessive API calls and keeps the experience fluid.
+- **AbortController Race-Safety**: In-flight requests are cancelled if the user types again before the response arrives.
+- **B-Tree Index**: Explicit PostgreSQL B-Tree index (`ix_users_username_btree`) on the `username` column ensures prefix-ILIKE queries stay O(log n) at scale.
+- **Smart Exclusion**: Results automatically hide the searching user themselves and anyone already connected (pending or accepted friendship).
+- **XSS-Safe Rendering**: All user-supplied strings are HTML-escaped before injection into the DOM.
 
 ### 📱 Unified Mobile Experience
 - **Premium Side-Drawer**: A feature-rich mobile navigation system with integrated search, profile hero card, and theme switching.
@@ -38,7 +45,7 @@ GreetX is a high-performance, premium chat platform designed for real human conn
 
 ### 🌓 Global Theme Engine
 - **Dark/Light Mode**: Instant theme switching powered by real-time CSS variable toggling.
-- **State Persistence**: Theme choice is securely preserved via `localStorage` for a consistent experience across sessions.
+- **State Persistence**: Theme choice and app preferences (notifications, privacy) are securely preserved via `localStorage` for a consistent experience across sessions.
 
 ---
 
@@ -74,6 +81,29 @@ GreetX is a high-performance, premium chat platform designed for real human conn
 
 ---
 
+## 🔌 API Reference
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/api/signup` | — | Register a new user (OTP pre-verified) |
+| `POST` | `/api/login` | — | Password login |
+| `POST` | `/api/send_otp` | — | Send 6-digit OTP to email |
+| `POST` | `/api/verify_otp` | — | Verify OTP for signup |
+| `POST` | `/api/login_otp` | — | OTP-based login |
+| `PUT`  | `/api/profile` | 🔒 Session | Update name / bio |
+| `PUT`  | `/api/profile/password` | 🔒 Session | Change password |
+| `POST` | `/api/logout` | 🔒 Session | Destroy session |
+| `GET`  | `/api/search/users?q=` | 🔒 Session | Live prefix-search (excludes self & friends) |
+| `POST` | `/api/friends/request` | 🔒 Session | Send a friend request (bidirectional duplicate check) |
+| `GET`  | `/api/friends` | 🔒 Session | Get friends list + pending incoming requests |
+| `POST` | `/api/friends/accept/<id>` | 🔒 Session | Accept a pending request (receiver only) |
+| `POST` | `/api/friends/decline/<id>` | 🔒 Session | Decline or cancel a request |
+| `GET`  | `/api/notifications` | 🔒 Session | Get all unread notifications (page load) |
+| `GET`  | `/api/notifications/stream` | 🔒 Session | SSE stream — real-time push (5s poll interval) |
+| `POST` | `/api/notifications/mark-read` | 🔒 Session | Mark notification IDs as read (or all) |
+
+---
+
 ## 🚀 Getting Started
 
 1. **Clone the repository**:
@@ -103,7 +133,7 @@ GreetX is a high-performance, premium chat platform designed for real human conn
    ```
 
 6. **Access the app**:
-   Open `https://localhost:5000/` in your browser. Note: Your browser may warn you about an insecure connection because it uses a self-signed certificate for local development. You can bypass this warning to view the app.
+   Open `http://localhost:5000/` in your browser.
 
 ---
 

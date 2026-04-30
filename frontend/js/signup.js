@@ -273,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (response.ok) {
                 alert('Profile Completed Successfully! Welcome to GreetX.');
-                window.location.href = '/login'; // Redirect to login
+                window.location.href = '/profile'; // Redirect to profile contextually
             } else {
                 alert('Signup failed: ' + (data.error || 'Unknown error'));
             }

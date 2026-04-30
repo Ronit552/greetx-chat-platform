@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Contacts - GreetX{% endblock %}
+{% block title %}Friends - GreetX{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/contacts.css') }}">
@@ -16,10 +16,10 @@
     <!-- Page Header -->
     <div class="contacts-page-header">
         <div>
-            <h1>Contacts <span class="contacts-count" id="contacts-count">8</span></h1>
+            <h1>Friends <span class="contacts-count" id="contacts-count">0</span></h1>
             <p>Your friends and connections on GreetX.</p>
         </div>
-        <button class="btn-primary" id="btn-add-friend">+ Add Friend</button>
+        <button class="btn-primary" id="btn-add-friend">+ Find People</button>
     </div>
 
     <!-- Search & Filter Bar -->
@@ -29,136 +29,87 @@
                 fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
-            <input type="text" id="contacts-search-input" placeholder="Search contacts…" autocomplete="off">
+            <input type="text" id="contacts-search-input" placeholder="Search friends…" autocomplete="off">
         </div>
         <div class="filter-tabs">
             <button class="filter-tab active" data-filter="all">All</button>
-            <button class="filter-tab" data-filter="online">🟢 Online</button>
             <button class="filter-tab" data-filter="pending">⏳ Pending</button>
         </div>
     </div>
 
-    <!-- Contacts Grid -->
-    <div class="contacts-grid" id="contacts-grid">
+    <!-- ── Pending Requests Section ───────────────────────── -->
+    <div id="pending-section" class="hidden">
+        <p class="friends-section-label">📩 Pending Requests</p>
+        <div class="contacts-grid" id="pending-grid"></div>
+    </div>
 
-        <div class="contact-card" data-status="online" data-name="aisha siddiqui">
-            <div class="contact-avatar" style="background: linear-gradient(135deg,#f59e0b,#d97706);">AS</div>
-            <span class="contact-status-dot online"></span>
-            <h3 class="contact-name">Aisha Siddiqui</h3>
-            <p class="contact-handle">@aisha.s</p>
-            <p class="contact-bio">UI/UX designer • coffee addict ☕</p>
-            <div class="contact-actions">
-                <button class="btn-msg">💬 Message</button>
-                <button class="btn-more">···</button>
-            </div>
+    <!-- ── Friends Section ───────────────────────────────── -->
+    <div id="friends-section">
+        <!-- Loading skeletons shown while API call is in flight -->
+        <div class="contacts-grid" id="contacts-grid">
+            <div class="contact-card skeleton-card"><div class="skeleton-avatar"></div><div class="skeleton-line w60"></div><div class="skeleton-line w40"></div></div>
+            <div class="contact-card skeleton-card"><div class="skeleton-avatar"></div><div class="skeleton-line w60"></div><div class="skeleton-line w40"></div></div>
+            <div class="contact-card skeleton-card"><div class="skeleton-avatar"></div><div class="skeleton-line w60"></div><div class="skeleton-line w40"></div></div>
         </div>
-
-        <div class="contact-card" data-status="online" data-name="rohan kumar">
-            <div class="contact-avatar" style="background: linear-gradient(135deg,#10b981,#059669);">RK</div>
-            <span class="contact-status-dot online"></span>
-            <h3 class="contact-name">Rohan Kumar</h3>
-            <p class="contact-handle">@rohan_k</p>
-            <p class="contact-bio">Full-stack dev. Building things 🚀</p>
-            <div class="contact-actions">
-                <button class="btn-msg">💬 Message</button>
-                <button class="btn-more">···</button>
-            </div>
-        </div>
-
-        <div class="contact-card" data-status="online" data-name="maya johnson">
-            <div class="contact-avatar" style="background: linear-gradient(135deg,#8b5cf6,#7c3aed);">MJ</div>
-            <span class="contact-status-dot online"></span>
-            <h3 class="contact-name">Maya Johnson</h3>
-            <p class="contact-handle">@maya.j</p>
-            <p class="contact-bio">Design lead • music & travel 🎵✈️</p>
-            <div class="contact-actions">
-                <button class="btn-msg">💬 Message</button>
-                <button class="btn-more">···</button>
-            </div>
-        </div>
-
-        <div class="contact-card" data-status="offline" data-name="leo martin">
-            <div class="contact-avatar" style="background: linear-gradient(135deg,#3b82f6,#2563eb);">LM</div>
-            <span class="contact-status-dot offline"></span>
-            <h3 class="contact-name">Leo Martin</h3>
-            <p class="contact-handle">@leomartin</p>
-            <p class="contact-bio">Backend eng. • open-source fan 🐧</p>
-            <div class="contact-actions">
-                <button class="btn-msg">💬 Message</button>
-                <button class="btn-more">···</button>
-            </div>
-        </div>
-
-        <div class="contact-card" data-status="offline" data-name="priya nair">
-            <div class="contact-avatar" style="background: linear-gradient(135deg,#ec4899,#db2777);">PN</div>
-            <span class="contact-status-dot offline"></span>
-            <h3 class="contact-name">Priya Nair</h3>
-            <p class="contact-handle">@priya_n</p>
-            <p class="contact-bio">Content creator & photographer 📷</p>
-            <div class="contact-actions">
-                <button class="btn-msg">💬 Message</button>
-                <button class="btn-more">···</button>
-            </div>
-        </div>
-
-        <div class="contact-card" data-status="offline" data-name="chris wu">
-            <div class="contact-avatar" style="background: linear-gradient(135deg,#f43f5e,#e11d48);">CW</div>
-            <span class="contact-status-dot offline"></span>
-            <h3 class="contact-name">Chris Wu</h3>
-            <p class="contact-handle">@chriswu</p>
-            <p class="contact-bio">Product manager @ a startup 📦</p>
-            <div class="contact-actions">
-                <button class="btn-msg">💬 Message</button>
-                <button class="btn-more">···</button>
-            </div>
-        </div>
-
-        <!-- Pending -->
-        <div class="contact-card pending-card" data-status="pending" data-name="zara ahmed">
-            <div class="contact-avatar" style="background: linear-gradient(135deg,#64748b,#475569);">ZA</div>
-            <span class="contact-status-dot pending-dot"></span>
-            <h3 class="contact-name">Zara Ahmed</h3>
-            <p class="contact-handle">@zara.a</p>
-            <p class="contact-bio">Sent you a friend request.</p>
-            <div class="contact-actions">
-                <button class="btn-accept">✓ Accept</button>
-                <button class="btn-decline">✕</button>
-            </div>
-        </div>
-
-        <div class="contact-card pending-card" data-status="pending" data-name="sam torres">
-            <div class="contact-avatar" style="background: linear-gradient(135deg,#0ea5e9,#0284c7);">ST</div>
-            <span class="contact-status-dot pending-dot"></span>
-            <h3 class="contact-name">Sam Torres</h3>
-            <p class="contact-handle">@samtorres</p>
-            <p class="contact-bio">Sent you a friend request.</p>
-            <div class="contact-actions">
-                <button class="btn-accept">✓ Accept</button>
-                <button class="btn-decline">✕</button>
-            </div>
-        </div>
-
     </div>
 
     <!-- Empty State -->
     <div class="contacts-empty hidden" id="contacts-empty">
-        <p>😕 No contacts match your search.</p>
+        <span class="empty-icon">👥</span>
+        <p>No friends yet.</p>
+        <span class="empty-hint">Click <strong>+ Find People</strong> to search by username and send requests.</span>
     </div>
+
+    <!-- No-match state (search filter) -->
+    <div class="contacts-empty hidden" id="contacts-no-match">
+        <p>😕 No friends match your search.</p>
+    </div>
+
 </div>
 
-<!-- Add Friend Modal -->
+<!-- ── Add Friend Modal ──────────────────────────────────── -->
 <div class="modal-overlay hidden" id="add-friend-overlay">
-    <div class="modal-box">
-        <h3>Add a Friend</h3>
-        <p>Enter a GreetX username to send a friend request.</p>
-        <div class="modal-input-wrap">
-            <span>@</span>
-            <input type="text" id="add-friend-input" placeholder="username" autocomplete="off">
+    <div class="modal-box" id="add-friend-modal">
+        <!-- Header -->
+        <div class="modal-header">
+            <div>
+                <h3>Find People</h3>
+                <p>Search by username to connect with others on GreetX.</p>
+            </div>
+            <button class="modal-close-x" id="modal-close-x" aria-label="Close">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
         </div>
+
+        <!-- Search Input -->
+        <div class="modal-input-wrap" id="modal-input-wrap">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="add-friend-input" placeholder="Type a username…" autocomplete="off" spellcheck="false">
+            <!-- Spinner — shown during fetch -->
+            <div class="search-spinner hidden" id="search-spinner">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+
+        <!-- Live Results Dropdown -->
+        <div class="search-results-dropdown hidden" id="search-results-dropdown">
+            <!-- Result items injected by JS -->
+        </div>
+
+        <!-- Status line (errors / hints) -->
         <p class="modal-status hidden" id="modal-status"></p>
+
+        <!-- Action row -->
         <div class="modal-actions">
             <button class="btn-secondary" id="modal-cancel">Cancel</button>
-            <button class="btn-primary" id="modal-send">Send Request</button>
         </div>
     </div>
 </div>

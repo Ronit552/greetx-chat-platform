@@ -20,9 +20,9 @@
                     <div class="status-indicator online"></div>
                 </div>
                 <div class="header-info">
-                    <h1 class="full-name" id="display-name">John Doe</h1>
-                    <p class="username" id="display-username">@johndoe</p>
-                    <p class="short-bio" id="display-bio">Loving the conversation. Building cool stuff.</p>
+                    <h1 class="full-name" id="display-name">{{ user.name }}</h1>
+                    <p class="username" id="display-username">@{{ user.username }}</p>
+                    <p class="short-bio" id="display-bio">{{ user.bio }}</p>
                 </div>
                 <div class="header-actions">
                     <button class="btn-primary" id="btn-quick-edit">Edit Profile</button>
@@ -37,10 +37,10 @@
                 <div class="card account-info-card">
                     <h3 class="card-title">Account Information</h3>
                     <ul class="info-list">
-                        <li><span class="label">Email Address</span><span class="value">johndoe@example.com</span></li>
-                        <li><span class="label">Joined Date</span><span class="value">April 12, 2026</span></li>
+                        <li><span class="label">Email Address</span><span class="value">{{ user.email }}</span></li>
+                        <li><span class="label">Joined Date</span><span class="value">{{ user.created_at.strftime('%B %d, %Y') }}</span></li>
                         <li><span class="label">Status</span><span class="badge verified">Verified</span></li>
-                        <li><span class="label">User ID</span><span class="value subtle">#GX-90210</span></li>
+                        <li><span class="label">User ID</span><span class="value subtle">#GX-{{ '%05d' % user.id }}</span></li>
                     </ul>
                 </div>
 
@@ -99,18 +99,17 @@
 
                     <div class="input-group">
                         <label for="edit-name">Full Name</label>
-                        <input type="text" id="edit-name" value="John Doe">
+                        <input type="text" id="edit-name" value="{{ user.name }}">
                     </div>
 
-                    <!-- 2. Username Validation -->
+                    <!-- 2. Username (Unchangeable) -->
                     <div class="input-group username-group">
-                        <label for="edit-username">Username <span class="loader hidden" id="username-loader"></span></label>
-                        <div class="input-wrapper">
+                        <label for="edit-username">Username</label>
+                        <div class="input-wrapper" style="opacity: 0.7; cursor: not-allowed;">
                             <span class="prefix">@</span>
-                            <input type="text" id="edit-username" value="johndoe">
-                            <span id="username-status" class="status-badge hidden">Available</span>
+                            <input type="text" id="edit-username" value="{{ user.username }}" readonly style="cursor: not-allowed; pointer-events: none;">
                         </div>
-                        <p class="hint-text" id="username-hint">You can change your username once every 30 days.</p>
+                        <p class="hint-text" id="username-hint">Your username cannot be changed.</p>
                     </div>
 
                     <!-- 3. Bio with Character Counter -->
@@ -119,7 +118,7 @@
                             <label for="edit-bio">Short Bio</label>
                             <span class="char-counter" id="bio-counter">44/150</span>
                         </div>
-                        <textarea id="edit-bio" rows="4" maxlength="150" placeholder="Tell us about yourself...">Loving the conversation. Building cool stuff.</textarea>
+                        <textarea id="edit-bio" rows="4" maxlength="150" placeholder="Tell us about yourself...">{{ user.bio }}</textarea>
                     </div>
 
                     <div class="form-actions">
