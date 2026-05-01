@@ -87,6 +87,7 @@ class Notification(db.Model):
     Types:
       'friend_request'  — user_id received a friend request from from_user_id.
       'friend_accepted' — user_id's friend request was accepted by from_user_id.
+      'new_message'     — user_id received a chat message from from_user_id.
 
     SSE polling queries by (user_id, id > last_seen_id) — both columns indexed.
     """
@@ -109,3 +110,35 @@ class Notification(db.Model):
 
     def __repr__(self):
         return f"<Notification {self.type} → user {self.user_id}>"
+
+
+class Message(db.Model):
+    """Direct message table.
+
+    A conversation between user A and B = rows where
+      (sender_id=A AND receiver_id=B) OR (sender_id=B AND receiver_id=A).
+
+    Private SocketIO room: dm_{min(a,b)}_{max(a,b)}
+    Pagination: use  id < before_id  for infinite-scroll (load older messages).
+    """
+    __tablename__ = 'messages'
+
+    id          = db.Column(db.Integer, primary_key=True)
+    sender_id   = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    receiver_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    content     = db.Column(db.Text, nullable=False)
+    timestamp   = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    is_read     = db.Column(db.Boolean, default=False, nullable=False)
+
+    sender   = db.relationship('User', foreign_keys=[sender_id])
+    receiver = db.relationship('User', foreign_keys=[receiver_id])
+
+    __table_args__ = (
+        Index('ix_messages_sender_id',   'sender_id'),
+        Index('ix_messages_receiver_id', 'receiver_id'),
+        # Covers conversation history range queries (the hot path)
+        Index('ix_messages_conv_ts', 'sender_id', 'receiver_id', 'timestamp'),
+    )
+
+    def __repr__(self):
+        return f"<Message {self.sender_id}→{self.receiver_id} @ {self.timestamp}>"

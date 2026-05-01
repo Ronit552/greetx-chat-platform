@@ -121,6 +121,14 @@ function renderAll() {
     } else {
         noMatchState.classList.add('hidden');
         friendsGrid.innerHTML = filteredFriends.map((u, i) => buildFriendCard(u, i)).join('');
+        
+        // bind message buttons
+        friendsGrid.querySelectorAll('.btn-msg').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const peerUsername = btn.dataset.username;
+                window.location.href = `/chat?peer=${encodeURIComponent(peerUsername)}`;
+            });
+        });
     }
 }
 
@@ -134,7 +142,7 @@ function buildFriendCard(u, i) {
         <p class="contact-handle">@${escapeHtml(u.username)}</p>
         <p class="contact-bio">${escapeHtml(u.bio || '')}</p>
         <div class="contact-actions">
-            <button class="btn-msg">💬 Message</button>
+            <button class="btn-msg" data-uid="${u.id}" data-username="${escapeHtml(u.username)}">💬 Message</button>
         </div>
     </div>`;
 }

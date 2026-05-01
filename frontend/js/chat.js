@@ -1,151 +1,95 @@
 /**
- * GreetX — Interactive Chat Page JS
- * No backend. All state is in-memory.
+ * GreetX — Real-Time Chat Client
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Transport:   Flask-SocketIO (WebSocket / long-poll fallback)
+ * REST:        GET /api/conversations, GET /api/messages/<peer_id>
+ * Rooms:       server-enforced dm_{min}_{max} — only friends can join
+ * Pagination:  infinite scroll — scroll to top → load 50 older messages
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
 (function () {
     'use strict';
 
-    // ──────────────────────────────────────────────
-    // DATA STORE
-    // ──────────────────────────────────────────────
-    const ME = { name: 'You', initials: 'JD' };
+    // ── Bootstrap from server-rendered data attrs ─────────────
+    const shell         = document.getElementById('chat-shell');
+    const ME_ID         = parseInt(shell.dataset.userId, 10);
+    const ME_INITIALS   = shell.dataset.userInitials || '??';
+    const OPEN_PEER_ID  = parseInt(shell.dataset.openPeerId, 10) || null;
 
-    const CONTACTS = {
-        aisha: {
-            name: 'Aisha Siddiqui', handle: '@aisha.s', initials: 'AS', status: 'online',
-            color: 'linear-gradient(135deg,#f59e0b,#d97706)',
-            replies: [
-                "That sounds amazing! 🎉",
-                "Can't wait for 4 PM then!",
-                "I'll share my screen so you can see everything.",
-                "By the way, have you seen the latest design trends? 🔥",
-                "I was thinking a more glassmorphic look for the app 💎",
-                "What do you think about the new color palette?",
-                "Also, should we add dark mode support?",
-            ]
-        },
-        rohan: {
-            name: 'Rohan Kumar', handle: '@rohan_k', initials: 'RK', status: 'online',
-            color: 'linear-gradient(135deg,#10b981,#059669)',
-            replies: [
-                "Hey! What's up? 🚀", "Working on that new feature.",
-                "The API integration is almost done!", "Check my latest commit!",
-                "Wanna do a code review later?", "Found a cool open-source library btw 🐧",
-            ]
-        },
-        maya: {
-            name: 'Maya Johnson', handle: '@maya.j', initials: 'MJ', status: 'online',
-            color: 'linear-gradient(135deg,#8b5cf6,#7c3aed)',
-            replies: [
-                "Design is life 🎨", "Let me show you the new mockups!",
-                "The color palette looks stunning in dark mode ✨",
-                "I'm thinking of adding microanimations 🎬",
-                "Travel and design inspo go hand in hand ✈️",
-            ]
-        },
-        leo: {
-            name: 'Leo Martin', handle: '@leomartin', initials: 'LM', status: 'offline',
-            color: 'linear-gradient(135deg,#3b82f6,#2563eb)',
-            replies: [
-                "Hey, back now!", "Sorry was busy with server configs 🐧",
-                "Open-source ftw!", "Have you tried that new database lib?",
-                "Performance improvements are live 🚀",
-            ]
-        },
-        priya: {
-            name: 'Priya Nair', handle: '@priya_n', initials: 'PN', status: 'offline',
-            color: 'linear-gradient(135deg,#ec4899,#db2777)',
-            replies: [
-                "Looking forward to it! 📷", "Just got back from a shoot!",
-                "Check out these new photos 🌅", "The lighting was perfect.",
-                "Content creation never stops 😄",
-            ]
-        },
-        chris: {
-            name: 'Chris Wu', handle: '@chriswu', initials: 'CW', status: 'offline',
-            color: 'linear-gradient(135deg,#f43f5e,#e11d48)',
-            replies: [
-                "Product update dropped 📦", "Shipping new features this week!",
-                "Sprint review went well 🎯", "Talk soon!",
-                "Let's sync tomorrow?",
-            ]
-        },
-    };
-
-    // Messages per conversation (starts with hard-coded data from Aisha's chat)
-    const MESSAGES = {
-        aisha: [
-            { id: 1, from: 'them', text: 'Hey, are you free later? 👋', time: '10:02 AM', reactions: {} },
-            { id: 2, from: 'them', text: 'I wanted to catch up about the redesign project 🎨', time: '10:03 AM', reactions: {} },
-            { id: 3, from: 'me', text: 'Hey Aisha! Yeah, I\'m free after 4 PM. What\'s up?', time: '10:06 AM', reactions: {} },
-            { id: 4, from: 'them', text: 'Perfect! I\'ve been working on some new UI concepts for the app. Want to review together? 🚀', time: '10:08 AM', reactions: { '❤️': 1 } },
-            { id: 5, from: 'me', text: 'Sounds great! ❤️ Can\'t wait to see what you\'ve come up with.', time: '10:10 AM', reactions: {} },
-        ],
-        rohan: [
-            { id: 1, from: 'them', text: 'Hey! Just accepted your friend request 👋', time: '9:18 AM', reactions: {} },
-            { id: 2, from: 'them', text: 'Building some cool stuff lately 🚀', time: '9:18 AM', reactions: {} },
-        ],
-        maya: [
-            { id: 1, from: 'me', text: 'Take a look at this 🎨', time: '9:00 AM', reactions: {} },
-            { id: 2, from: 'them', text: '@johndoe looks amazing! This design is 🔥', time: '9:05 AM', reactions: {} },
-        ],
-        leo: [
-            { id: 1, from: 'me', text: 'Thanks, will check!', time: 'Yesterday', reactions: {} },
-        ],
-        priya: [
-            { id: 1, from: 'them', text: 'Sounds great! See you there 📷', time: 'Mon', reactions: {} },
-        ],
-        chris: [
-            { id: 1, from: 'me', text: 'Got it, talk soon 📦', time: 'Sun', reactions: {} },
-        ],
-    };
-
-    let msgIdCounter = 100;
-    let activeConv = 'aisha';
-    let reactionTargetId = null;
-    let typingTimeout = null;
-    let replyReplyIndex = {};
-
-    // ──────────────────────────────────────────────
-    // ELEMENT REFS
-    // ──────────────────────────────────────────────
-    const convList = document.getElementById('conv-list');
-    const convItems = convList.querySelectorAll('.conv-item');
-    const messagesArea = document.getElementById('messages-area');
-    const msgInput = document.getElementById('msg-input');
-    const sendBtn = document.getElementById('send-btn');
-    const emojiToggleBtn = document.getElementById('emoji-toggle-btn');
-    const emojiPicker = document.getElementById('emoji-picker');
-    const reactionPicker = document.getElementById('reaction-picker');
-    const typingIndicator = document.getElementById('typing-indicator');
-    const chatShell = document.getElementById('chat-shell');
-    const chatPanel = document.getElementById('chat-panel');
-    const chatBackBtn = document.getElementById('chat-back-btn');
-    const chatToast = document.getElementById('chat-toast');
+    // ── DOM refs ──────────────────────────────────────────────
+    const convList        = document.getElementById('conv-list');
+    const messagesArea    = document.getElementById('messages-area');
+    const msgInput        = document.getElementById('msg-input');
+    const sendBtn         = document.getElementById('send-btn');
+    const emojiToggleBtn  = document.getElementById('emoji-toggle-btn');
+    const emojiPicker     = document.getElementById('emoji-picker');
+    const reactionPicker  = document.getElementById('reaction-picker');
+    const chatShell       = document.getElementById('chat-shell');
+    const chatPanel       = document.getElementById('chat-panel');
+    const chatBackBtn     = document.getElementById('chat-back-btn');
+    const chatToast       = document.getElementById('chat-toast');
     const convSearchInput = document.getElementById('conv-search');
+    const headerAvatar    = document.getElementById('chat-header-avatar');
+    const headerInitials  = document.getElementById('chat-header-initials');
+    const headerName      = document.getElementById('chat-header-name');
+    const headerStatus    = document.getElementById('chat-header-status');
+    const headerDot       = document.getElementById('chat-header-dot');
+    const glassNav        = document.querySelector('.glass-nav');
+    const chatHeader      = document.getElementById('chat-header');
+    const chatInputBar    = document.getElementById('chat-input-bar');
+    const chatEmptyState  = document.getElementById('chat-empty-state');
 
-    // Header refs
-    const headerAvatar = document.getElementById('chat-header-avatar');
-    const headerInitials = document.getElementById('chat-header-initials');
-    const headerName = document.getElementById('chat-header-name');
-    const headerStatus = document.getElementById('chat-header-status');
-    const headerDot = document.getElementById('chat-header-dot');
-    // Navbar ref (for mobile hide/show)
-    const glassNav = document.querySelector('.glass-nav');
+    // ── State ─────────────────────────────────────────────────
+    let socket      = null;
+    let activeConv  = null;   // { peer_id, peer_name, peer_initials, color }
+    let oldestMsgId = null;   // for infinite scroll
+    let loadingMore = false;
+    let hasMore     = true;
+    let typingTimer = null;
+    let isTyping    = false;
+    let convData    = [];     // cache of conversation list
 
-    // ──────────────────────────────────────────────
-    // HELPERS
-    // ──────────────────────────────────────────────
-    function getNow() {
-        const d = new Date();
+    // ── Avatar gradients ──────────────────────────────────────
+    const GRADIENTS = [
+        'linear-gradient(135deg,#6366f1,#4f46e5)',
+        'linear-gradient(135deg,#f59e0b,#d97706)',
+        'linear-gradient(135deg,#10b981,#059669)',
+        'linear-gradient(135deg,#8b5cf6,#7c3aed)',
+        'linear-gradient(135deg,#ec4899,#db2777)',
+        'linear-gradient(135deg,#3b82f6,#2563eb)',
+        'linear-gradient(135deg,#f43f5e,#e11d48)',
+        'linear-gradient(135deg,#14b8a6,#0d9488)',
+    ];
+    function gradientFor(id) { return GRADIENTS[Math.abs(id) % GRADIENTS.length]; }
+
+    // ── Helpers ───────────────────────────────────────────────
+    function escapeHtml(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function formatTime(iso) {
+        const d = new Date(iso);
         let h = d.getHours(), m = d.getMinutes();
         const ampm = h >= 12 ? 'PM' : 'AM';
         h = h % 12 || 12;
-        return `${h}:${String(m).padStart(2, '0')} ${ampm}`;
+        return `${h}:${String(m).padStart(2,'0')} ${ampm}`;
     }
 
-    function showToast(msg, duration = 2000) {
+    function formatPreviewTime(iso) {
+        if (!iso) return '';
+        const now  = new Date();
+        const date = new Date(iso);
+        const diff = (now - date) / 1000;
+        if (diff < 60)     return 'now';
+        if (diff < 3600)   return `${Math.floor(diff/60)}m`;
+        if (diff < 86400)  return `${Math.floor(diff/3600)}h`;
+        if (diff < 604800) return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][date.getDay()];
+        return `${date.getDate()}/${date.getMonth()+1}`;
+    }
+
+    function showToast(msg, duration = 2500) {
+        if (!chatToast) return;
         chatToast.textContent = msg;
         chatToast.classList.remove('hidden');
         clearTimeout(showToast._t);
@@ -156,281 +100,415 @@
         messagesArea.scrollTo({ top: messagesArea.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
     }
 
-    // ──────────────────────────────────────────────
-    // RENDER
-    // ──────────────────────────────────────────────
-    function renderMessages(convId) {
-        const msgs = MESSAGES[convId] || [];
-        const contact = CONTACTS[convId];
-        messagesArea.innerHTML = '';
+    function isMobile() { return window.innerWidth <= 768; }
 
-        // Date divider
-        const divider = document.createElement('div');
-        divider.className = 'msg-date-divider';
-        divider.innerHTML = '<span>Today</span>';
-        messagesArea.appendChild(divider);
+    // ── SocketIO ──────────────────────────────────────────────
+    function initSocket() {
+        socket = io({ withCredentials: true });
 
-        msgs.forEach(msg => {
-            messagesArea.appendChild(buildMsgRow(msg, contact));
+        socket.on('connected', () => { /* authenticated */ });
+
+        socket.on('connect_error', () => {
+            showToast('⚠️ Connection issue — retrying…');
         });
 
-        // Typing indicator always at end (hidden)
-        messagesArea.appendChild(buildTypingIndicator(contact));
+        socket.on('new_message', (msg) => {
+            const isActive = activeConv && (
+                msg.sender_id === activeConv.peer_id ||
+                msg.receiver_id === activeConv.peer_id
+            );
+            if (isActive) {
+                removeTypingIndicator();
+                messagesArea.appendChild(buildMsgRow(msg));
+                appendTypingIndicator();
+                scrollToBottom();
+                // Mark peer's message as read
+                if (!msg.is_mine) {
+                    fetch(`/api/messages/${activeConv.peer_id}/read`, {
+                        method: 'POST', credentials: 'same-origin'
+                    });
+                }
+            }
+            // Always update sidebar preview
+            refreshSidebarItem(msg);
+        });
 
-        scrollToBottom(false);
+        socket.on('typing', (data) => {
+            if (activeConv && data.user_id === activeConv.peer_id) showTypingIndicator();
+        });
+
+        socket.on('stop_typing', (data) => {
+            if (activeConv && data.user_id === activeConv.peer_id) hideTypingIndicator();
+        });
+
+        socket.on('error', (data) => showToast(data.message || 'Error'));
     }
 
-    function buildMsgRow(msg, contact) {
-        const isMe = msg.from === 'me';
-        const row = document.createElement('div');
-        row.className = `msg-row ${isMe ? 'outgoing' : 'incoming'}`;
-        row.dataset.msgId = msg.id;
+    // ── Conversation list ─────────────────────────────────────
+    async function loadConversations() {
+        renderConvSkeletons(4);
+        try {
+            const res = await fetch('/api/conversations', { credentials: 'same-origin' });
+            if (!res.ok) return;
+            convData = await res.json();
+            renderConvList(convData);
 
-        const reactionsHtml = buildReactionsHtml(msg.reactions, msg.id);
-
-        if (isMe) {
-            row.innerHTML = `
-                <div class="msg-group">
-                    <div class="msg-bubble outgoing" data-msg-id="${msg.id}">
-                        <p>${escapeHtml(msg.text)}</p>
-                        <span class="msg-time">${msg.time} <span class="msg-status read">✓✓</span></span>
-                        <div class="msg-reactions" id="reactions-${msg.id}">${reactionsHtml}</div>
-                    </div>
-                    <div class="msg-bubble-actions">
-                        <button class="react-btn" data-target="${msg.id}" title="React">😊</button>
-                    </div>
-                </div>`;
-        } else {
-            row.innerHTML = `
-                <div class="msg-bubble-avatar" style="background:${contact.color}">${contact.initials}</div>
-                <div class="msg-group">
-                    <div class="msg-bubble incoming" data-msg-id="${msg.id}">
-                        <p>${escapeHtml(msg.text)}</p>
-                        <span class="msg-time">${msg.time}</span>
-                        <div class="msg-reactions" id="reactions-${msg.id}">${reactionsHtml}</div>
-                    </div>
-                    <div class="msg-bubble-actions">
-                        <button class="react-btn" data-target="${msg.id}" title="React">😊</button>
-                    </div>
-                </div>`;
+            // Auto-open peer if navigated from Friends page
+            if (OPEN_PEER_ID) {
+                const conv = convData.find(c => c.peer_id === OPEN_PEER_ID);
+                if (conv) {
+                    openConversation(conv);
+                } else {
+                    // Peer is a friend but no messages yet — build a minimal conv object
+                    const username = shell.dataset.openPeerUsername;
+                    openConversation({
+                        peer_id:       OPEN_PEER_ID,
+                        peer_name:     username,
+                        peer_username: username,
+                        peer_initials: username.slice(0, 2).toUpperCase(),
+                        unread_count:  0,
+                        last_message:  null,
+                    });
+                }
+            }
+        } catch (_) {
+            convList.innerHTML = '<li class="conv-empty">Could not load conversations.</li>';
         }
-
-        // Attach reaction button handler
-        const reactBtn = row.querySelector('.react-btn');
-        if (reactBtn) reactBtn.addEventListener('click', onReactBtnClick);
-
-        // Attach reaction chip click
-        row.querySelectorAll('.reaction-chip').forEach(chip => {
-            chip.addEventListener('click', () => handleChipClick(msg.id, chip.dataset.emoji, convId));
-        });
-
-        return row;
     }
 
-    function buildReactionsHtml(reactions, msgId) {
-        return Object.entries(reactions).map(([emoji, count]) =>
-            `<span class="reaction-chip" data-emoji="${emoji}" data-msg-id="${msgId}">${emoji} ${count}</span>`
-        ).join('');
+    function renderConvList(convs) {
+        convList.innerHTML = '';
+        if (!convs.length) {
+            convList.innerHTML = '<li class="conv-empty">No conversations yet.<br>Add friends to start chatting!</li>';
+            return;
+        }
+        convs.forEach(c => convList.appendChild(buildConvItem(c)));
     }
 
-    function buildTypingIndicator(contact) {
-        const row = document.createElement('div');
-        row.className = 'msg-row incoming hidden';
-        row.id = 'typing-indicator';
-        row.innerHTML = `
-            <div class="msg-bubble-avatar" style="background:${contact.color}">${contact.initials}</div>
-            <div class="msg-bubble incoming typing-bubble">
-                <span class="typing-dot"></span>
-                <span class="typing-dot"></span>
-                <span class="typing-dot"></span>
+    function buildConvItem(c) {
+        const li = document.createElement('li');
+        li.className = 'conv-item';
+        li.dataset.peerId = c.peer_id;
+        const color   = gradientFor(c.peer_id);
+        const preview = c.last_message
+            ? (c.last_message.is_mine ? `You: ${c.last_message.content}` : c.last_message.content)
+            : 'Start a conversation…';
+        const timeStr = c.last_message ? formatPreviewTime(c.last_message.timestamp) : '';
+        const unread  = c.unread_count > 0
+            ? `<span class="conv-unread">${c.unread_count > 99 ? '99+' : c.unread_count}</span>`
+            : '';
+
+        li.innerHTML = `
+            <div class="conv-avatar" style="background:${color};">
+                <span>${escapeHtml(c.peer_initials)}</span>
+                <span class="conv-status-dot"></span>
+            </div>
+            <div class="conv-info">
+                <div class="conv-top">
+                    <span class="conv-name">${escapeHtml(c.peer_name)}</span>
+                    <span class="conv-time">${timeStr}</span>
+                </div>
+                <div class="conv-bottom">
+                    <span class="conv-last">${escapeHtml(preview.slice(0, 42))}${preview.length > 42 ? '…' : ''}</span>
+                    ${unread}
+                </div>
             </div>`;
-        return row;
+
+        li.addEventListener('click', () => openConversation(c));
+        return li;
     }
 
-    function escapeHtml(str) {
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    function renderConvSkeletons(n) {
+        convList.innerHTML = Array(n).fill(0).map(() => `
+            <li class="conv-item conv-skeleton">
+                <div class="skel skel-avatar"></div>
+                <div class="conv-info">
+                    <div class="skel skel-line skel-name"></div>
+                    <div class="skel skel-line skel-preview"></div>
+                </div>
+            </li>`).join('');
     }
 
-    // ──────────────────────────────────────────────
-    // UPDATE HEADER
-    // ──────────────────────────────────────────────
-    function updateHeader(convId) {
-        const c = CONTACTS[convId];
-        headerInitials.textContent = c.initials;
-        headerAvatar.style.background = c.color;
-        headerName.textContent = c.name;
-        headerDot.className = `chat-header-dot ${c.status}`;
-        headerStatus.textContent = c.status === 'online'
-            ? '🟢 Online · last seen just now'
-            : '⚫ Offline · was active recently';
+    // ── Open conversation ─────────────────────────────────────
+    async function openConversation(conv) {
+        if (activeConv?.peer_id === conv.peer_id && !isMobile()) return;
 
-        // Update bubble avatar on typing indicator (re-rendered on every conversation switch)
-    }
+        activeConv  = { ...conv, color: gradientFor(conv.peer_id) };
+        window.currentChatPeerId = activeConv.peer_id;
+        oldestMsgId = null;
+        hasMore     = true;
 
-    // ──────────────────────────────────────────────
-    // CONVERSATION SWITCHING
-    // ──────────────────────────────────────────────
-    convItems.forEach(item => {
-        item.addEventListener('click', () => switchConv(item.dataset.conv, item));
-    });
-
-    function switchConv(convId, itemEl) {
-        if (convId === activeConv && !isMobile()) return;
-        activeConv = convId;
-        replyReplyIndex[convId] = replyReplyIndex[convId] || 0;
-
-        // Update active class
+        // Sidebar active state
         convList.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
-        if (itemEl) {
-            itemEl.classList.add('active');
-            // Remove unread badge
-            const badge = itemEl.querySelector('.conv-unread');
-            if (badge) badge.remove();
+        const li = convList.querySelector(`[data-peer-id="${conv.peer_id}"]`);
+        if (li) {
+            li.classList.add('active');
+            li.querySelector('.conv-unread')?.remove();
         }
 
-        updateHeader(convId);
-        renderMessages(convId);
+        updateHeader(activeConv);
+        
+        if (chatHeader) chatHeader.classList.remove('hidden');
+        if (chatInputBar) chatInputBar.classList.remove('hidden');
+        messagesArea.classList.remove('hidden');
+        if (chatEmptyState) chatEmptyState.classList.add('hidden');
 
-        // Mobile: slide panel in + hide navbar
+        messagesArea.innerHTML = '';
+        renderMsgSkeletons(6);
+
+        // Join SocketIO room
+        socket.emit('join_room', { peer_id: conv.peer_id });
+
+        // Load message history
+        await loadMessages(conv.peer_id);
+
         if (isMobile()) {
             chatShell.classList.add('panel-visible');
             if (glassNav) glassNav.classList.add('nav-hidden');
         }
     }
 
-    function isMobile() {
-        return window.innerWidth <= 768;
-    }
+    // ── Load messages (paginated) ─────────────────────────────
+    async function loadMessages(peer_id, before_id = null) {
+        if (loadingMore) return;
+        loadingMore = true;
 
-    // ──────────────────────────────────────────────
-    // BACK BUTTON (mobile)
-    // ──────────────────────────────────────────────
-    chatBackBtn.addEventListener('click', () => {
-        chatShell.classList.remove('panel-visible');
-        // Restore navbar on back
-        if (glassNav) glassNav.classList.remove('nav-hidden');
-    });
+        try {
+            const url = `/api/messages/${peer_id}` + (before_id ? `?before_id=${before_id}` : '');
+            const res = await fetch(url, { credentials: 'same-origin' });
+            if (!res.ok) throw new Error();
+            const msgs = await res.json();
 
-    // Show back button on mobile via CSS (handled in CSS), but also set initial state
-    function handleResize() {
-        if (!isMobile()) {
-            chatBackBtn.classList.add('hidden');
-            chatShell.classList.remove('panel-visible');
-            // Always restore nav on desktop
-            if (glassNav) glassNav.classList.remove('nav-hidden');
-        } else {
-            chatBackBtn.classList.remove('hidden');
+            if (!before_id) {
+                // Initial load — clear skeletons
+                messagesArea.innerHTML = '';
+            }
+
+            if (msgs.length === 0 && !before_id) {
+                messagesArea.innerHTML = `
+                    <div class="msg-empty-state">
+                        <div class="msg-empty-icon">💬</div>
+                        <p>No messages yet. Say hello!</p>
+                    </div>`;
+                hasMore = false;
+                appendTypingIndicator();
+                return;
+            }
+
+            if (msgs.length < 50) hasMore = false;
+
+            if (before_id) {
+                // Infinite scroll: prepend older messages, preserve scroll position
+                const prevH = messagesArea.scrollHeight;
+                // Insert a "load more" divider if needed
+                if (msgs.length > 0) {
+                    msgs.forEach(m => {
+                        const row = buildMsgRow(m);
+                        messagesArea.insertBefore(row, messagesArea.firstChild);
+                    });
+                    // Remove loading spinner at top
+                    messagesArea.querySelector('.load-more-spinner')?.remove();
+                    messagesArea.scrollTop = messagesArea.scrollHeight - prevH;
+                }
+            } else {
+                // Insert date divider
+                const divider = document.createElement('div');
+                divider.className = 'msg-date-divider';
+                divider.innerHTML = '<span>Today</span>';
+                messagesArea.appendChild(divider);
+
+                msgs.forEach(m => messagesArea.appendChild(buildMsgRow(m)));
+                appendTypingIndicator();
+                scrollToBottom(false);
+            }
+
+            if (msgs.length > 0) oldestMsgId = msgs[0].id;
+
+        } catch (_) {
+            if (!before_id) messagesArea.innerHTML = '<div class="msg-empty-state"><p>Could not load messages.</p></div>';
+        } finally {
+            loadingMore = false;
         }
     }
 
-    window.addEventListener('resize', handleResize);
-    handleResize();
+    // ── Infinite scroll ───────────────────────────────────────
+    messagesArea.addEventListener('scroll', () => {
+        if (messagesArea.scrollTop < 80 && hasMore && !loadingMore && activeConv) {
+            // Show spinner at top
+            const spinner = document.createElement('div');
+            spinner.className = 'load-more-spinner';
+            spinner.textContent = '⏳ Loading older messages…';
+            messagesArea.insertBefore(spinner, messagesArea.firstChild);
+            loadMessages(activeConv.peer_id, oldestMsgId);
+        }
+    });
 
-    // ──────────────────────────────────────────────
-    // SEND MESSAGE
-    // ──────────────────────────────────────────────
+    // ── Build message row ─────────────────────────────────────
+    function buildMsgRow(msg) {
+        const isMe = msg.is_mine;
+        const time = formatTime(msg.timestamp);
+        const row  = document.createElement('div');
+        row.className    = `msg-row ${isMe ? 'outgoing' : 'incoming'}`;
+        row.dataset.msgId = msg.id;
+
+        if (isMe) {
+            row.innerHTML = `
+                <div class="msg-group">
+                    <div class="msg-bubble outgoing" data-msg-id="${msg.id}">
+                        <p>${escapeHtml(msg.content)}</p>
+                        <span class="msg-time">${time}
+                            <span class="msg-status ${msg.is_read ? 'read' : ''}">✓✓</span>
+                        </span>
+                    </div>
+                </div>`;
+        } else {
+            const color    = activeConv?.color || gradientFor(0);
+            const initials = activeConv?.peer_initials || '??';
+            row.innerHTML = `
+                <div class="msg-bubble-avatar" style="background:${color};">${escapeHtml(initials)}</div>
+                <div class="msg-group">
+                    <div class="msg-bubble incoming" data-msg-id="${msg.id}">
+                        <p>${escapeHtml(msg.content)}</p>
+                        <span class="msg-time">${time}</span>
+                    </div>
+                </div>`;
+        }
+        return row;
+    }
+
+    // ── Typing indicator ──────────────────────────────────────
+    function appendTypingIndicator() {
+        removeTypingIndicator();
+        const color    = activeConv?.color || gradientFor(0);
+        const initials = activeConv?.peer_initials || '??';
+        const row = document.createElement('div');
+        row.className = 'msg-row incoming hidden';
+        row.id = 'typing-indicator';
+        row.innerHTML = `
+            <div class="msg-bubble-avatar" style="background:${color};">${escapeHtml(initials)}</div>
+            <div class="msg-bubble incoming typing-bubble">
+                <span class="typing-dot"></span>
+                <span class="typing-dot"></span>
+                <span class="typing-dot"></span>
+            </div>`;
+        messagesArea.appendChild(row);
+    }
+
+    function removeTypingIndicator() {
+        document.getElementById('typing-indicator')?.remove();
+    }
+
+    function showTypingIndicator() {
+        const el = document.getElementById('typing-indicator');
+        if (el) { el.classList.remove('hidden'); scrollToBottom(); }
+    }
+
+    function hideTypingIndicator() {
+        document.getElementById('typing-indicator')?.classList.add('hidden');
+    }
+
+    function renderMsgSkeletons(n) {
+        messagesArea.innerHTML = Array(n).fill(0).map((_, i) => {
+            const isMe = i % 3 === 2;
+            return `<div class="msg-row ${isMe ? 'outgoing' : 'incoming'} msg-skeleton-row">
+                <div class="skel skel-msg${isMe ? ' skel-msg-out' : ''}"></div>
+            </div>`;
+        }).join('');
+    }
+
+    // ── Update header ─────────────────────────────────────────
+    function updateHeader(conv) {
+        headerInitials.textContent = conv.peer_initials;
+        headerAvatar.style.background = conv.color;
+        headerName.textContent = conv.peer_name;
+        headerDot.className = 'chat-header-dot';
+        headerStatus.textContent = `@${conv.peer_username}`;
+    }
+
+    // ── Sidebar preview refresh ───────────────────────────────
+    function refreshSidebarItem(msg) {
+        const peer_id = msg.is_mine ? msg.receiver_id : msg.sender_id;
+        let li = convList.querySelector(`[data-peer-id="${peer_id}"]`);
+
+        if (!li) {
+            // New conversation — reload the sidebar
+            loadConversations();
+            return;
+        }
+
+        const preview = msg.is_mine ? `You: ${msg.content}` : msg.content;
+        const lastEl  = li.querySelector('.conv-last');
+        const timeEl  = li.querySelector('.conv-time');
+        if (lastEl) lastEl.textContent = preview.slice(0, 42) + (preview.length > 42 ? '…' : '');
+        if (timeEl) timeEl.textContent = 'now';
+
+        // Unread badge (only if not the active conversation)
+        if (!activeConv || activeConv.peer_id !== peer_id) {
+            let badge = li.querySelector('.conv-unread');
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'conv-unread';
+                li.querySelector('.conv-bottom')?.appendChild(badge);
+            }
+            const cur = parseInt(badge.textContent, 10) || 0;
+            badge.textContent = cur + 1;
+        }
+
+        // Bubble to top of list
+        convList.insertBefore(li, convList.firstChild);
+    }
+
+    // ── Send message ──────────────────────────────────────────
     function sendMessage() {
         const text = msgInput.value.trim();
-        if (!text) return;
+        if (!text || !activeConv || !socket) return;
 
-        const id = ++msgIdCounter;
-        const msg = { id, from: 'me', text, time: getNow(), reactions: {} };
-        MESSAGES[activeConv] = MESSAGES[activeConv] || [];
-        MESSAGES[activeConv].push(msg);
-
-        const contact = CONTACTS[activeConv];
-
-        // Remove typing indicator before adding new message
-        const oldTyping = document.getElementById('typing-indicator');
-        if (oldTyping) oldTyping.remove();
-
-        // Append outgoing bubble
-        const row = buildMsgRow(msg, contact);
-        row.style.animation = 'msgSlideIn 0.25s cubic-bezier(0.4,0,0.2,1)';
-        messagesArea.appendChild(row);
-
-        // Re-add typing indicator
-        messagesArea.appendChild(buildTypingIndicator(contact));
+        socket.emit('send_message', { receiver_id: activeConv.peer_id, content: text });
 
         msgInput.value = '';
         msgInput.style.height = 'auto';
         sendBtn.disabled = true;
-        scrollToBottom();
 
-        // Update sidebar preview
-        updateSidebarPreview(activeConv, `You: ${text}`);
-
-        // Simulate reply after a delay
-        simulateReply(activeConv);
+        if (isTyping) {
+            socket.emit('stop_typing', { peer_id: activeConv.peer_id });
+            isTyping = false;
+            clearTimeout(typingTimer);
+        }
     }
 
     sendBtn.addEventListener('click', sendMessage);
-
     msgInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
-        }
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     });
 
+    // ── Typing detection ──────────────────────────────────────
     msgInput.addEventListener('input', () => {
-        // Auto grow textarea
         msgInput.style.height = 'auto';
         msgInput.style.height = Math.min(msgInput.scrollHeight, 120) + 'px';
-
         sendBtn.disabled = !msgInput.value.trim();
+
+        if (!socket || !activeConv) return;
+        if (!isTyping) {
+            isTyping = true;
+            socket.emit('typing', { peer_id: activeConv.peer_id });
+        }
+        clearTimeout(typingTimer);
+        typingTimer = setTimeout(() => {
+            isTyping = false;
+            socket.emit('stop_typing', { peer_id: activeConv.peer_id });
+        }, 2500);
     });
 
-    // ──────────────────────────────────────────────
-    // SIDEBAR PREVIEW UPDATE
-    // ──────────────────────────────────────────────
-    function updateSidebarPreview(convId, text) {
-        const item = convList.querySelector(`[data-conv="${convId}"]`);
-        if (!item) return;
-        const lastEl = item.querySelector('.conv-last');
-        if (lastEl) lastEl.textContent = text.length > 32 ? text.slice(0, 32) + '…' : text;
-        const timeEl = item.querySelector('.conv-time');
-        if (timeEl) timeEl.textContent = 'now';
-    }
+    // ── Conversation search (sidebar filter) ──────────────────
+    convSearchInput.addEventListener('input', () => {
+        const q = convSearchInput.value.toLowerCase().trim();
+        convList.querySelectorAll('.conv-item').forEach(li => {
+            const name = (li.querySelector('.conv-name')?.textContent || '').toLowerCase();
+            li.style.display = name.includes(q) ? '' : 'none';
+        });
+    });
 
-    // ──────────────────────────────────────────────
-    // SIMULATE REPLY
-    // ──────────────────────────────────────────────
-    function simulateReply(convId) {
-        const indicator = document.getElementById('typing-indicator');
-        if (indicator) indicator.classList.remove('hidden');
-        scrollToBottom();
-
-        const delay = 1200 + Math.random() * 1400;
-
-        clearTimeout(typingTimeout);
-        typingTimeout = setTimeout(() => {
-            const indicator = document.getElementById('typing-indicator');
-            if (indicator) indicator.classList.add('hidden');
-
-            if (convId !== activeConv) return;
-
-            const contact = CONTACTS[convId];
-            const replies = contact.replies;
-            const idx = (replyReplyIndex[convId] || 0) % replies.length;
-            replyReplyIndex[convId] = idx + 1;
-
-            const replyText = replies[idx];
-            const id = ++msgIdCounter;
-            const msg = { id, from: 'them', text: replyText, time: getNow(), reactions: {} };
-            MESSAGES[convId].push(msg);
-
-            const row = buildMsgRow(msg, contact);
-            messagesArea.appendChild(row);
-            scrollToBottom();
-
-            updateSidebarPreview(convId, replyText);
-        }, delay);
-    }
-
-    // ──────────────────────────────────────────────
-    // EMOJI PICKER (for message input)
-    // ──────────────────────────────────────────────
+    // ── Emoji picker ──────────────────────────────────────────
     emojiToggleBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         emojiPicker.classList.toggle('hidden');
@@ -439,99 +517,75 @@
 
     emojiPicker.querySelectorAll('.emoji-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            const emoji = btn.dataset.emoji;
             const pos = msgInput.selectionStart;
             const val = msgInput.value;
-            msgInput.value = val.slice(0, pos) + emoji + val.slice(pos);
+            msgInput.value = val.slice(0, pos) + btn.dataset.emoji + val.slice(pos);
             msgInput.focus();
-            msgInput.selectionStart = msgInput.selectionEnd = pos + emoji.length;
+            msgInput.selectionStart = msgInput.selectionEnd = pos + btn.dataset.emoji.length;
             sendBtn.disabled = !msgInput.value.trim();
             emojiPicker.classList.add('hidden');
         });
     });
 
-    // ──────────────────────────────────────────────
-    // REACTION PICKER
-    // ──────────────────────────────────────────────
-    function onReactBtnClick(e) {
-        e.stopPropagation();
-        const target = e.currentTarget.dataset.target;
-        reactionTargetId = parseInt(target);
-
-        // Position picker near button
-        const rect = e.currentTarget.getBoundingClientRect();
-        reactionPicker.style.top = (rect.top - 60) + 'px';
-        reactionPicker.style.left = Math.max(8, rect.left - 60) + 'px';
-        reactionPicker.classList.remove('hidden');
-        emojiPicker.classList.add('hidden');
-    }
-
-    reactionPicker.querySelectorAll('.rp-emoji').forEach(el => {
-        el.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (reactionTargetId == null) return;
-            handleChipClick(reactionTargetId, el.dataset.emoji, activeConv);
-            reactionPicker.classList.add('hidden');
-        });
-    });
-
-    function handleChipClick(msgId, emoji, convId) {
-        const msgs = MESSAGES[convId] || [];
-        const msg = msgs.find(m => m.id === msgId);
-        if (!msg) return;
-
-        if (!msg.reactions) msg.reactions = {};
-        if (msg.reactions[emoji]) {
-            msg.reactions[emoji]++;
-        } else {
-            msg.reactions[emoji] = 1;
-        }
-
-        // Re-render reactions inside that bubble
-        const reactionsEl = document.getElementById(`reactions-${msgId}`);
-        if (reactionsEl) {
-            reactionsEl.innerHTML = buildReactionsHtml(msg.reactions, msgId);
-            reactionsEl.querySelectorAll('.reaction-chip').forEach(chip => {
-                chip.addEventListener('click', () => handleChipClick(msgId, chip.dataset.emoji, convId));
-            });
-        }
-    }
-
-    // Close pickers on outside click
     document.addEventListener('click', (e) => {
-        if (!emojiPicker.contains(e.target) && e.target !== emojiToggleBtn) {
+        if (!emojiPicker.contains(e.target) && e.target !== emojiToggleBtn)
             emojiPicker.classList.add('hidden');
-        }
-        if (!reactionPicker.contains(e.target)) {
+        if (!reactionPicker.contains(e.target))
             reactionPicker.classList.add('hidden');
+    });
+
+    // ── Mobile back button ────────────────────────────────────
+    chatBackBtn.addEventListener('click', () => {
+        chatShell.classList.remove('panel-visible');
+        if (glassNav) glassNav.classList.remove('nav-hidden');
+    });
+
+    function handleResize() {
+        if (!isMobile()) {
+            chatBackBtn.classList.add('hidden');
+            chatShell.classList.remove('panel-visible');
+            if (glassNav) glassNav.classList.remove('nav-hidden');
+        } else {
+            chatBackBtn.classList.remove('hidden');
         }
-    });
+    }
+    window.addEventListener('resize', handleResize);
+    handleResize();
 
-    // ──────────────────────────────────────────────
-    // CONVERSATION SEARCH (sidebar filter)
-    // ──────────────────────────────────────────────
-    convSearchInput.addEventListener('input', () => {
-        const query = convSearchInput.value.toLowerCase().trim();
-        convList.querySelectorAll('.conv-item').forEach(item => {
-            const name = (item.querySelector('.conv-name')?.textContent || '').toLowerCase();
-            item.style.display = name.includes(query) ? '' : 'none';
-        });
-    });
-
-    // ──────────────────────────────────────────────
-    // ACTION BUTTONS (toast feedback)
-    // ──────────────────────────────────────────────
-    document.getElementById('voice-call-btn')?.addEventListener('click', () => showToast('📞 Voice call feature coming soon!'));
-    document.getElementById('video-call-btn')?.addEventListener('click', () => showToast('🎥 Video call feature coming soon!'));
+    // ── Action button toasts ──────────────────────────────────
+    document.getElementById('voice-call-btn')?.addEventListener('click', () => showToast('📞 Voice call coming soon!'));
+    document.getElementById('video-call-btn')?.addEventListener('click', () => showToast('🎥 Video call coming soon!'));
     document.getElementById('search-in-chat-btn')?.addEventListener('click', () => showToast('🔍 In-chat search coming soon!'));
     document.getElementById('chat-more-btn')?.addEventListener('click', () => showToast('⚙️ More options coming soon!'));
     document.getElementById('attach-btn')?.addEventListener('click', () => showToast('📎 File attachment coming soon!'));
-    document.getElementById('sidebar-new-btn')?.addEventListener('click', () => showToast('✨ New chat coming soon!'));
+    document.getElementById('sidebar-new-btn')?.addEventListener('click', () => showToast('✨ New chat — pick a friend!'));
 
-    // ──────────────────────────────────────────────
-    // INITIAL RENDER
-    // ──────────────────────────────────────────────
-    updateHeader('aisha');
-    renderMessages('aisha');
+    // ── Skeleton CSS (injected — no separate file needed) ─────
+    const skStyle = document.createElement('style');
+    skStyle.textContent = `
+        .conv-skeleton { pointer-events: none; opacity: 0.6; }
+        .skel { background: var(--clr-glass-card-header); border-radius: 8px; animation: skelPulse 1.4s ease infinite; }
+        .skel-avatar  { width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0; }
+        .skel-line    { height: 11px; margin-bottom: 6px; }
+        .skel-name    { width: 55%; }
+        .skel-preview { width: 80%; }
+        .msg-skeleton-row { opacity: 0.5; }
+        .skel-msg     { height: 36px; width: 180px; border-radius: 14px; }
+        .skel-msg-out { margin-left: auto; }
+        .load-more-spinner { text-align: center; font-size: 0.78rem; color: var(--clr-text-muted); padding: 0.5rem; }
+        .msg-empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center;
+            height:100%; gap:0.6rem; color:var(--clr-text-muted); font-size:0.9rem; }
+        .msg-empty-icon { font-size: 2.5rem; }
+        .conv-empty { padding: 1.5rem 1rem; font-size: 0.85rem; color: var(--clr-text-muted);
+            text-align: center; line-height: 1.6; list-style: none; }
+        @keyframes skelPulse {
+            0%,100% { opacity: 1; } 50% { opacity: 0.4; }
+        }
+    `;
+    document.head.appendChild(skStyle);
+
+    // ── Boot ──────────────────────────────────────────────────
+    initSocket();
+    loadConversations();
 
 })();

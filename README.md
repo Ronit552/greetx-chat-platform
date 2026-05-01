@@ -101,6 +101,26 @@ GreetX is a high-performance, premium chat platform designed for real human conn
 | `GET`  | `/api/notifications` | 🔒 Session | Get all unread notifications (page load) |
 | `GET`  | `/api/notifications/stream` | 🔒 Session | SSE stream — real-time push (5s poll interval) |
 | `POST` | `/api/notifications/mark-read` | 🔒 Session | Mark notification IDs as read (or all) |
+| `GET`  | `/api/conversations` | 🔒 Session | All friends with last message preview + unread count |
+| `GET`  | `/api/messages/<peer_id>?before_id=&limit=` | 🔒 Session | Paginated message history (newest-first, 50/page) |
+| `POST` | `/api/messages/<peer_id>/read` | 🔒 Session | Mark all messages from peer as read |
+
+**SocketIO Events (client → server)**
+| Event | Payload | Action |
+|-------|---------|--------|
+| `join_room` | `{ peer_id }` | Join private DM room (friendship-gated) |
+| `send_message` | `{ receiver_id, content }` | Persist + broadcast message to room |
+| `typing` | `{ peer_id }` | Broadcast typing indicator to peer |
+| `stop_typing` | `{ peer_id }` | Hide typing indicator on peer's side |
+
+**SocketIO Events (server → client)**
+| Event | Payload | When |
+|-------|---------|------|
+| `connected` | `{ user_id }` | On authenticated connect |
+| `new_message` | message object | Message saved and broadcast to room |
+| `room_joined` | `{ room, peer_id }` | Confirmation after join_room |
+| `typing` | `{ user_id }` | Peer started typing |
+| `stop_typing` | `{ user_id }` | Peer stopped typing |
 
 ---
 

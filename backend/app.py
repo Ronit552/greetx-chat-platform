@@ -7,8 +7,9 @@ import json
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_mail import Mail, Message
-from models import db, User, OTP, Friendship, Notification
+from flask_mail import Mail, Message as MailMessage
+from flask_socketio import SocketIO, emit, join_room, leave_room
+from models import db, User, OTP, Friendship, Notification, Message
 
 load_dotenv()
 
@@ -31,6 +32,9 @@ app.secret_key = os.getenv('SECRET_KEY') or os.urandom(24)
 
 db.init_app(app)
 
+# SocketIO — async_mode='threading' keeps SSE and SocketIO both working
+socketio = SocketIO(app, async_mode='threading', cors_allowed_origins='*')
+
 with app.app_context():
     db.create_all()
 
@@ -46,7 +50,13 @@ def screenshots(filename):
 
 @app.route('/chat')
 def chat():
-    return render_template('chat.html')
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    user = User.query.get(session['user_id'])
+    # Optional: open a specific peer on load via ?peer=<username>
+    peer_username = request.args.get('peer', '').strip()
+    open_peer = User.query.filter_by(username=peer_username).first() if peer_username else None
+    return render_template('chat.html', current_user=user, open_peer=open_peer)
 
 @app.route('/signup')
 def signup():
@@ -147,7 +157,7 @@ def send_otp():
         db.session.add(otp_record)
         
     try:
-        msg = Message("Your GreetX Verification Code",
+        msg = MailMessage("Your GreetX Verification Code",
                       sender=app.config['MAIL_USERNAME'],
                       recipients=[email])
         
@@ -677,7 +687,253 @@ def _fmt_notif(n):
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# CHAT — helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _get_dm_room(a: int, b: int) -> str:
+    """Deterministic private room name. Always the same regardless of who initiated."""
+    lo, hi = sorted([a, b])
+    return f"dm_{lo}_{hi}"
+
+
+def _fmt_message(m, me: int) -> dict:
+    """Serialize a Message row."""
+    return {
+        'id':          m.id,
+        'sender_id':   m.sender_id,
+        'receiver_id': m.receiver_id,
+        'content':     m.content,
+        'timestamp':   m.timestamp.isoformat(),
+        'is_read':     m.is_read,
+        'is_mine':     m.sender_id == me,
+    }
+
+
+def _are_friends(me: int, peer: int) -> bool:
+    """Return True if me and peer have an accepted friendship."""
+    return Friendship.query.filter(
+        db.or_(
+            db.and_(Friendship.sender_id == me,   Friendship.receiver_id == peer),
+            db.and_(Friendship.sender_id == peer, Friendship.receiver_id == me),
+        ),
+        Friendship.status == 'accepted',
+    ).first() is not None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CHAT — SocketIO event handlers
+# ─────────────────────────────────────────────────────────────────────────────
+
+@socketio.on('connect')
+def handle_connect():
+    """Reject unauthenticated connections immediately."""
+    if 'user_id' not in session:
+        return False   # causes the client to receive a 'connect_error'
+    emit('connected', {'user_id': session['user_id']})
+
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    pass   # Flask-SocketIO cleans up room memberships automatically
+
+
+@socketio.on('join_room')
+def handle_join_room(data):
+    """Join the private DM room for a specific peer.
+
+    Security: friendship is verified server-side before join_room() is called.
+    User C cannot join the A↔B room because they will fail the friendship check.
+    """
+    me      = session.get('user_id')
+    peer_id = int(data.get('peer_id', 0))
+    if not me or not peer_id:
+        return
+
+    if not _are_friends(me, peer_id):
+        emit('error', {'message': 'You are not friends with this user'})
+        return
+
+    room = _get_dm_room(me, peer_id)
+    join_room(room)
+    emit('room_joined', {'room': room, 'peer_id': peer_id})
+
+
+@socketio.on('send_message')
+def handle_send_message(data):
+    """Validate, persist, and broadcast a message to the private room."""
+    me      = session.get('user_id')
+    peer_id = int(data.get('receiver_id', 0))
+    content = (data.get('content') or '').strip()
+
+    if not me or not peer_id or not content:
+        return
+    if not _are_friends(me, peer_id):
+        emit('error', {'message': 'Not friends — cannot send message'})
+        return
+
+    msg = Message(sender_id=me, receiver_id=peer_id, content=content)
+    db.session.add(msg)
+
+    # Upsert a notification for the receiver
+    existing_notif = Notification.query.filter_by(
+        user_id=peer_id,
+        from_user_id=me,
+        type='new_message',
+        is_read=False
+    ).first()
+
+    if existing_notif:
+        # Bump the existing unread notification to the top
+        existing_notif.created_at = datetime.utcnow()
+    else:
+        # Create a new notification
+        notif = Notification(user_id=peer_id, from_user_id=me, type='new_message')
+        db.session.add(notif)
+
+    db.session.commit()
+
+    room    = _get_dm_room(me, peer_id)
+    payload = _fmt_message(msg, me)
+    # Emit to the whole room (sender sees their own bubble too)
+    emit('new_message', payload, room=room)
+
+
+@socketio.on('typing')
+def handle_typing(data):
+    """Broadcast a typing indicator to the other party only."""
+    me      = session.get('user_id')
+    peer_id = int(data.get('peer_id', 0))
+    if not me or not peer_id:
+        return
+    room = _get_dm_room(me, peer_id)
+    emit('typing', {'user_id': me}, room=room, include_self=False)
+
+
+@socketio.on('stop_typing')
+def handle_stop_typing(data):
+    me      = session.get('user_id')
+    peer_id = int(data.get('peer_id', 0))
+    if not me or not peer_id:
+        return
+    room = _get_dm_room(me, peer_id)
+    emit('stop_typing', {'user_id': me}, room=room, include_self=False)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CHAT — REST endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.route('/api/conversations')
+def get_conversations():
+    """List all accepted friends with their last message preview + unread count.
+
+    Sorted by most-recent message timestamp (friends with no messages appear last,
+    sorted alphabetically by name).
+    """
+    if 'user_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+
+    me = session['user_id']
+
+    accepted = Friendship.query.filter(
+        db.or_(
+            db.and_(Friendship.sender_id   == me, Friendship.status == 'accepted'),
+            db.and_(Friendship.receiver_id == me, Friendship.status == 'accepted'),
+        )
+    ).all()
+
+    result = []
+    for f in accepted:
+        peer = f.receiver if f.sender_id == me else f.sender
+
+        last_msg = Message.query.filter(
+            db.or_(
+                db.and_(Message.sender_id == me,      Message.receiver_id == peer.id),
+                db.and_(Message.sender_id == peer.id, Message.receiver_id == me),
+            )
+        ).order_by(Message.timestamp.desc()).first()
+
+        unread = Message.query.filter_by(
+            sender_id=peer.id, receiver_id=me, is_read=False
+        ).count()
+
+        result.append({
+            'peer_id':       peer.id,
+            'peer_username': peer.username,
+            'peer_name':     peer.name,
+            'peer_initials': _make_initials(peer.name),
+            'unread_count':  unread,
+            'last_message':  {
+                'content':   last_msg.content,
+                'timestamp': last_msg.timestamp.isoformat(),
+                'is_mine':   last_msg.sender_id == me,
+            } if last_msg else None,
+        })
+
+    # Sort: conversations with messages first (newest first), then alphabetical
+    result.sort(
+        key=lambda x: x['last_message']['timestamp'] if x['last_message'] else '',
+        reverse=True,
+    )
+    return jsonify(result), 200
+
+
+@app.route('/api/messages/<int:peer_id>')
+def get_messages(peer_id):
+    """Paginated message history between current user and peer.
+
+    Query params:
+      before_id — return messages with id < before_id   (infinite scroll: load older)
+      limit     — max rows (default 50, hard cap 100)
+    """
+    if 'user_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+
+    me = session['user_id']
+
+    if not _are_friends(me, peer_id):
+        return jsonify({'error': 'Not friends with this user'}), 403
+
+    before_id = request.args.get('before_id', type=int)
+    limit     = min(request.args.get('limit', 50, type=int), 100)
+
+    q = Message.query.filter(
+        db.or_(
+            db.and_(Message.sender_id == me,      Message.receiver_id == peer_id),
+            db.and_(Message.sender_id == peer_id, Message.receiver_id == me),
+        )
+    )
+    if before_id:
+        q = q.filter(Message.id < before_id)
+
+    messages = q.order_by(Message.timestamp.desc()).limit(limit).all()
+    messages.reverse()   # Return chronological order to the client
+
+    # Mark messages from peer as read (side-effect of opening the conversation)
+    Message.query.filter_by(
+        sender_id=peer_id, receiver_id=me, is_read=False
+    ).update({'is_read': True}, synchronize_session=False)
+    db.session.commit()
+
+    return jsonify([_fmt_message(m, me) for m in messages]), 200
+
+
+@app.route('/api/messages/<int:peer_id>/read', methods=['POST'])
+def mark_messages_read(peer_id):
+    """Mark all unread messages from peer as read (called when user opens conversation)."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+
+    me = session['user_id']
+    Message.query.filter_by(
+        sender_id=peer_id, receiver_id=me, is_read=False
+    ).update({'is_read': True}, synchronize_session=False)
+    db.session.commit()
+    return jsonify({'message': 'Marked as read'}), 200
+
+
 if __name__ == '__main__':
-    # threaded=True is required for concurrent SSE connections
-    app.run(host='0.0.0.0', debug=True, port=5000, threaded=True)
+    # socketio.run replaces app.run — handles WebSocket upgrades + keeps SSE working
+    socketio.run(app, host='0.0.0.0', debug=True, port=5000, allow_unsafe_werkzeug=True)
 

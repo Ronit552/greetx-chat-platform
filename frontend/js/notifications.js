@@ -102,6 +102,7 @@
         const name = `<strong>${esc(n.from_name)}</strong>`;
         if (n.type === 'friend_request')  return `${name} sent you a friend request.`;
         if (n.type === 'friend_accepted') return `${name} accepted your friend request! 🎉`;
+        if (n.type === 'new_message')     return `${name} sent you a new message.`;
         return `${name} sent a notification.`;
     }
 
@@ -138,9 +139,11 @@
             markRead([n.id], li);
             if (notifPanel) notifPanel.classList.add('hidden');
             
-            // Both friend_request and friend_accepted relate to the Friends page
+            // Navigation based on notification type
             if (n.type === 'friend_request' || n.type === 'friend_accepted') {
                 window.location.href = '/contacts';
+            } else if (n.type === 'new_message') {
+                window.location.href = `/chat?peer=${encodeURIComponent(n.from_username)}`;
             }
         });
 
@@ -218,7 +221,14 @@
             let n;
             try { n = JSON.parse(event.data); } catch (_) { return; }
 
-            if (!['friend_request', 'friend_accepted'].includes(n.type)) return;
+            if (!['friend_request', 'friend_accepted', 'new_message'].includes(n.type)) return;
+
+            // If we are currently chatting with this user, ignore the notification visually
+            // but mark it as read in the background so it doesn't stay unread.
+            if (n.type === 'new_message' && window.currentChatPeerId === n.from_user_id) {
+                markRead([n.id]);
+                return;
+            }
 
             renderNotif(n, true);   // prepend — newest first
             incrementBadge();
